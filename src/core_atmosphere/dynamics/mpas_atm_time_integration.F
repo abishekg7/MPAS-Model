@@ -688,7 +688,7 @@ module atm_time_integration
 
 !$OMP PARALLEL DO
       do thread=1,nThreads
-         call atm_rk_integration_setup(state, diag, &
+         call atm_rk_integration_setup(state, diag, nVertLevels, num_scalars, &
                                        cellThreadStart(thread), cellThreadEnd(thread), &
                                        vertexThreadStart(thread), vertexThreadEnd(thread), &
                                        edgeThreadStart(thread), edgeThreadEnd(thread), &
@@ -1602,7 +1602,7 @@ module atm_time_integration
    end subroutine advance_scalars
 
 
-   subroutine atm_rk_integration_setup( state, diag, &
+   subroutine atm_rk_integration_setup( state, diag, nVertLevels, num_scalars, &
                                    cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
                                    cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd)
 
@@ -1610,8 +1610,9 @@ module atm_time_integration
 
       type (mpas_pool_type), intent(inout) :: state
       type (mpas_pool_type), intent(inout) :: diag
-      integer, intent(in) :: cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd
+      integer, intent(in) :: nVertLevels, num_scalars, cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd
       integer, intent(in) :: cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd
+      integer :: i, k, j
 
       real (kind=RKIND), dimension(:,:), pointer :: ru
       real (kind=RKIND), dimension(:,:), pointer :: ru_save
@@ -1650,17 +1651,50 @@ module atm_time_integration
       call mpas_pool_get_array(state, 'scalars', scalars_1, 1)
       call mpas_pool_get_array(state, 'scalars', scalars_2, 2)
 
-      ru_save(:,edgeStart:edgeEnd) = ru(:,edgeStart:edgeEnd)
-      rw_save(:,cellStart:cellEnd) = rw(:,cellStart:cellEnd)
-      rtheta_p_save(:,cellStart:cellEnd) = rtheta_p(:,cellStart:cellEnd)
-      rho_p_save(:,cellStart:cellEnd) = rho_p(:,cellStart:cellEnd)
+      MPAS_ACC_TIMER_START('atm_rk_integration_setup [ACC_data_xfer]')
+      !$acc enter data copyin(ru, ru_save, rw, rw_save, rtheta_p, rtheta_p_save ) & 
+      !$acc  copyin(rho_p, rho_p_save, u_1, u_2, w_1, w_2, theta_m_1, theta_m_2) & 
+      !$acc  copyin(rho_zz_1, rho_zz_2, rho_zz_old_split, scalars_1, scalars_2)
+      MPAS_ACC_TIMER_STOP('atm_rk_integration_setup [ACC_data_xfer]')
 
-      u_2(:,edgeStart:edgeEnd) = u_1(:,edgeStart:edgeEnd)
-      w_2(:,cellStart:cellEnd) = w_1(:,cellStart:cellEnd)
-      theta_m_2(:,cellStart:cellEnd) = theta_m_1(:,cellStart:cellEnd)
-      rho_zz_2(:,cellStart:cellEnd) = rho_zz_1(:,cellStart:cellEnd)
-      rho_zz_old_split(:,cellStart:cellEnd) =  rho_zz_1(:,cellStart:cellEnd)
-      scalars_2(:,:,cellStart:cellEnd) = scalars_1(:,:,cellStart:cellEnd)
+      !$acc parallel
+      !$acc loop gang vector collapse(2)
+      do i=edgeStart,edgeEnd
+        do k=1,nVertLevels
+	      ru_save(k,i) = ru(k,i)
+	      u_2(k,i) = u_1(k,i)
+        end do
+      end do
+      !$acc loop gang vector collapse(2)
+      do i=cellStart,cellEnd
+        do k=1,nVertLevels
+	      rw_save(k,i) = rw(k,i)
+	      rtheta_p_save(k,i) = rtheta_p(k,i)
+	      rho_p_save(k,i) = rho_p(k,i)
+	      w_2(k,i) = w_1(k,i)
+	      theta_m_2(k,i) = theta_m_1(k,i)
+	      rho_zz_2(k,i) = rho_zz_1(k,i)
+	      rho_zz_old_split(k,i) =  rho_zz_1(k,i)
+        end do
+      end do
+      !$acc loop gang worker
+      do i=cellStart,cellEnd
+        !$acc loop vector collapse(2)
+        do k=1,nVertLevels
+          do j=1,num_scalars
+	      scalars_2(j,k,i) = scalars_1(j,k,i)
+          end do
+        end do
+      end do
+      !$acc end parallel
+
+      MPAS_ACC_TIMER_START('atm_rk_integration_setup [ACC_data_xfer]')
+      !$acc exit data copyout(ru_save, rw_save, rtheta_p_save, rho_p_save)  &
+      !$acc  copyout(u_2, w_2, theta_m_2, rho_zz_2, rho_zz_old_split, scalars_2)
+      !$acc exit data delete(ru, ru_save, rw, rw_save, rtheta_p, rtheta_p_save) & 
+      !$acc  delete(rho_p, rho_p_save, u_1, u_2, w_1, w_2, theta_m_1, theta_m_2) & 
+      !$acc  delete(rho_zz_1, rho_zz_2, rho_zz_old_split, scalars_1, scalars_2)
+      MPAS_ACC_TIMER_STOP('atm_rk_integration_setup [ACC_data_xfer]')
 
    end subroutine atm_rk_integration_setup
 
