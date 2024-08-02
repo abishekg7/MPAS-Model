@@ -1612,7 +1612,7 @@ module atm_time_integration
       type (mpas_pool_type), intent(inout) :: diag
       integer, intent(in) :: nVertLevels, num_scalars, cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd
       integer, intent(in) :: cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd
-      integer :: i, k, j
+      integer :: iCell, iEdge, j, k
 
       real (kind=RKIND), dimension(:,:), pointer :: ru
       real (kind=RKIND), dimension(:,:), pointer :: ru_save
@@ -1652,47 +1652,59 @@ module atm_time_integration
       call mpas_pool_get_array(state, 'scalars', scalars_2, 2)
 
       MPAS_ACC_TIMER_START('atm_rk_integration_setup [ACC_data_xfer]')
-      !$acc enter data copyin(ru, ru_save, rw, rw_save, rtheta_p, rtheta_p_save ) & 
-      !$acc  copyin(rho_p, rho_p_save, u_1, u_2, w_1, w_2, theta_m_1, theta_m_2) & 
-      !$acc  copyin(rho_zz_1, rho_zz_2, rho_zz_old_split, scalars_1, scalars_2)
+      !$acc enter data create(ru_save, u_2, rw_save, rtheta_p_save, rho_p_save, &
+      !$acc                   w_2, theta_m_2, rho_zz_2, rho_zz_old_split, scalars_2) &
+      !$acc            copyin(ru, rw, rtheta_p, rho_p, u_1, w_1, theta_m_1, &
+      !$acc                   rho_zz_1, scalars_1)
       MPAS_ACC_TIMER_STOP('atm_rk_integration_setup [ACC_data_xfer]')
 
       !$acc parallel
-      !$acc loop gang vector collapse(2)
-      do i=edgeStart,edgeEnd
-        do k=1,nVertLevels
-	      ru_save(k,i) = ru(k,i)
-	      u_2(k,i) = u_1(k,i)
-        end do
-      end do
-      !$acc loop gang vector collapse(2)
-      do i=cellStart,cellEnd
-        do k=1,nVertLevels
-	      rw_save(k,i) = rw(k,i)
-	      rtheta_p_save(k,i) = rtheta_p(k,i)
-	      rho_p_save(k,i) = rho_p(k,i)
-	      w_2(k,i) = w_1(k,i)
-	      theta_m_2(k,i) = theta_m_1(k,i)
-	      rho_zz_2(k,i) = rho_zz_1(k,i)
-	      rho_zz_old_split(k,i) =  rho_zz_1(k,i)
-        end do
-      end do
       !$acc loop gang worker
-      do i=cellStart,cellEnd
-        !$acc loop vector collapse(2)
-        do k=1,nVertLevels
-          do j=1,num_scalars
-	      scalars_2(j,k,i) = scalars_1(j,k,i)
-          end do
-        end do
+      do iEdge = edgeStart,edgeEnd
+         !$acc loop vector
+         do k = 1,nVertLevels
+         ru_save(k,iEdge) = ru(k,iEdge)
+         u_2(k,iEdge) = u_1(k,iEdge)
+         end do
+      end do
+
+      !$acc loop gang worker
+      do iCell = cellStart,cellEnd
+         !$acc loop vector
+         do k = 1,nVertLevels
+         rtheta_p_save(k,iCell) = rtheta_p(k,iCell)
+         rho_p_save(k,iCell) = rho_p(k,iCell)
+         theta_m_2(k,iCell) = theta_m_1(k,iCell)
+         rho_zz_2(k,iCell) = rho_zz_1(k,iCell)
+         rho_zz_old_split(k,iCell) =  rho_zz_1(k,iCell)
+         end do
+      end do
+
+      !$acc loop gang worker
+      do iCell = cellStart,cellEnd
+         !$acc loop vector
+         do k = 1,nVertLevels+1
+         rw_save(k,iCell) = rw(k,iCell)
+         w_2(k,iCell) = w_1(k,iCell)
+         end do
+      end do
+
+      !$acc loop gang worker
+      do iCell = cellStart,cellEnd
+         !$acc loop vector collapse(2)
+         do k = 1,nVertLevels
+            do j = 1,num_scalars
+               scalars_2(j,k,iCell) = scalars_1(j,k,iCell)
+            end do
+         end do
       end do
       !$acc end parallel
 
       MPAS_ACC_TIMER_START('atm_rk_integration_setup [ACC_data_xfer]')
       !$acc exit data copyout(ru_save, rw_save, rtheta_p_save, rho_p_save)  &
       !$acc  copyout(u_2, w_2, theta_m_2, rho_zz_2, rho_zz_old_split, scalars_2)
-      !$acc exit data delete(ru, ru_save, rw, rw_save, rtheta_p, rtheta_p_save) & 
-      !$acc  delete(rho_p, rho_p_save, u_1, u_2, w_1, w_2, theta_m_1, theta_m_2) & 
+      !$acc exit data delete(ru, ru_save, rw, rw_save, rtheta_p, rtheta_p_save) &
+      !$acc  delete(rho_p, rho_p_save, u_1, u_2, w_1, w_2, theta_m_1, theta_m_2) &
       !$acc  delete(rho_zz_1, rho_zz_2, rho_zz_old_split, scalars_1, scalars_2)
       MPAS_ACC_TIMER_STOP('atm_rk_integration_setup [ACC_data_xfer]')
 
