@@ -2599,6 +2599,13 @@ module atm_time_integration
       rdts = 1.0_RKIND / dts
       coef_divdamp = 2.0_RKIND * smdiv * config_len_disp * rdts
 
+      MPAS_ACC_TIMER_START('atm_divergence_damping_3d [ACC_data_xfer]')
+      !$acc enter data copyin(ru_p, rtheta_pp, rtheta_pp_old, specZoneMaskEdge, &
+      !$acc         theta_m, cellsOnEdge) 
+      MPAS_ACC_TIMER_STOP('atm_divergence_damping_3d [ACC_data_xfer]')
+
+      !$acc parallel async
+      !$acc loop gang worker
       do iEdge=edgeStart,edgeEnd ! MGD do we really just need edges touching owned cells?
 
          cell1 = cellsOnEdge(1,iEdge)
@@ -2608,6 +2615,7 @@ module atm_time_integration
          if (cell1 <= nCellsSolve .or. cell2 <= nCellsSolve ) then
 
 !DIR$ IVDEP
+            !$acc loop vector
             do k=1,nVertLevels
 
 !!  unscaled 3d divergence damping
@@ -2625,6 +2633,13 @@ module atm_time_integration
             end do
          end if ! edges for block-owned cells
       end do ! end loop over edges
+      !$acc end parallel
+
+      MPAS_ACC_TIMER_START('atm_divergence_damping_3d [ACC_data_xfer]')
+      !$acc exit data copyout(ru_p) delete(rtheta_pp, rtheta_pp_old, &
+      !$acc         specZoneMaskEdge, theta_m, cellsOnEdge)
+      MPAS_ACC_TIMER_STOP('atm_divergence_damping_3d [ACC_data_xfer]')
+      
 
    end subroutine atm_divergence_damping_3d
 
