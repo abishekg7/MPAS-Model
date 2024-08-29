@@ -2578,7 +2578,7 @@ module atm_time_integration
                                        cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
                                        cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd)
 
-      ! reconstitute state variables from acoustic-step perturbation variables 
+      ! reconstitute state variables from acoustic-step perturbation variables
       ! after the acoustic steps.  The perturbation variables were originally set in
       ! subroutine atm_set_smlstep_pert_variables prior to their acoustic-steps update.
       ! we are also computing a few other state-derived variables here.
@@ -2708,7 +2708,7 @@ module atm_time_integration
       real (kind=RKIND), intent(in) :: dt
 
       integer, dimension(nCells+1), intent(in) :: bdyMaskCell
-      
+
       real (kind=RKIND), dimension(nVertLevels+1,nCells+1) :: wwAvg
       real (kind=RKIND), dimension(nVertLevels+1,nCells+1) :: rw_save
       real (kind=RKIND), dimension(nVertLevels+1,nCells+1) :: w
@@ -2763,7 +2763,7 @@ module atm_time_integration
       rcv = rgas/(cp-rgas)
       p0 = 1.0e+05  ! this should come from somewhere else...
 
-      ! Avoid FP errors caused by a potential division by zero below by 
+      ! Avoid FP errors caused by a potential division by zero below by
       ! initializing the "garbage cell" of rho_zz to a non-zero value
       do k=1,nVertLevels
          rho_zz(k,nCells+1) = 1.0
@@ -2792,12 +2792,14 @@ module atm_time_integration
 
           ! pick up part of diagnosed w from omega - divide by density later
             w(k,iCell) = rw(k,iCell)/(fzm(k)*zz(k,iCell)+fzp(k)*zz(k-1,iCell))
-                                      
+
          end do
 
          w(nVertLevels+1,iCell) = 0.0
+      end do
 
-         if (rk_step == 3) then
+      if (rk_step == 3) then
+         do iCell=cellStart,cellEnd
 !DIR$ IVDEP
             do k = 1, nVertLevels
                rtheta_p(k,iCell) = rtheta_p_save(k,iCell) + rtheta_pp(k,iCell) &
@@ -2808,18 +2810,19 @@ module atm_time_integration
                pressure_p(k,iCell) = zz(k,iCell) * rgas * (exner(k,iCell)*rtheta_p(k,iCell)+rtheta_base(k,iCell)  &
                                                           * (exner(k,iCell)-exner_base(k,iCell)))
             end do
-         else
+         end do
+      else
+         do iCell=cellStart,cellEnd
 !DIR$ IVDEP
             do k = 1, nVertLevels
                rtheta_p(k,iCell) = rtheta_p_save(k,iCell) + rtheta_pp(k,iCell)
                theta_m(k,iCell) = (rtheta_p(k,iCell) + rtheta_base(k,iCell))/rho_zz(k,iCell)
             end do
-         end if
+         end do
+      end if
 
-      end do
-
-      ! recover time-averaged ruAvg on all edges of owned cells (for upcoming scalar transport).  
-      ! we solved for these in the acoustic-step loop.  
+      ! recover time-averaged ruAvg on all edges of owned cells (for upcoming scalar transport).
+      ! we solved for these in the acoustic-step loop.
       ! we will compute ru and u here also, given we are here, even though we only need them on nEdgesSolve
 
 !$OMP BARRIER
@@ -2847,29 +2850,29 @@ module atm_time_integration
 
          if (bdyMaskCell(iCell) <= nRelaxZone) then  ! addition for regional_MPAS, no spec zone update
 
-         do i=1,nEdgesOnCell(iCell)
-            iEdge=edgesOnCell(i,iCell)
+            do i=1,nEdgesOnCell(iCell)
+               iEdge=edgesOnCell(i,iCell)
 
-            flux = (cf1*ru(1,iEdge) + cf2*ru(2,iEdge) + cf3*ru(3,iEdge))
-            w(1,iCell) = w(1,iCell) + edgesOnCell_sign(i,iCell) * &
-                                   (zb_cell(1,i,iCell) + sign(1.0_RKIND,flux)*zb3_cell(1,i,iCell))*flux
+               flux = (cf1*ru(1,iEdge) + cf2*ru(2,iEdge) + cf3*ru(3,iEdge))
+               w(1,iCell) = w(1,iCell) + edgesOnCell_sign(i,iCell) * &
+                                      (zb_cell(1,i,iCell) + sign(1.0_RKIND,flux)*zb3_cell(1,i,iCell))*flux
 
 !DIR$ IVDEP
-            do k = 2, nVertLevels
-               flux = (fzm(k)*ru(k,iEdge)+fzp(k)*ru(k-1,iEdge))
-               w(k,iCell) = w(k,iCell) + edgesOnCell_sign(i,iCell) * &
-                                    (zb_cell(k,i,iCell)+sign(1.0_RKIND,flux)*zb3_cell(k,i,iCell))*flux
+               do k = 2, nVertLevels
+                  flux = (fzm(k)*ru(k,iEdge)+fzp(k)*ru(k-1,iEdge))
+                  w(k,iCell) = w(k,iCell) + edgesOnCell_sign(i,iCell) * &
+                                       (zb_cell(k,i,iCell)+sign(1.0_RKIND,flux)*zb3_cell(k,i,iCell))*flux
+               end do
+
             end do
 
-         end do
-
-         w(1,iCell) = w(1,iCell)/(cf1*rho_zz(1,iCell)+cf2*rho_zz(2,iCell)+cf3*rho_zz(3,iCell))
+            w(1,iCell) = w(1,iCell)/(cf1*rho_zz(1,iCell)+cf2*rho_zz(2,iCell)+cf3*rho_zz(3,iCell))
 
 
-         !DIR$ IVDEP
-         do k = 2, nVertLevels
-           w(k,iCell) = w(k,iCell)/(fzm(k)*rho_zz(k,iCell)+fzp(k)*rho_zz(k-1,iCell))
-         end do
+            !DIR$ IVDEP
+            do k = 2, nVertLevels
+              w(k,iCell) = w(k,iCell)/(fzm(k)*rho_zz(k,iCell)+fzp(k)*rho_zz(k-1,iCell))
+            end do
 
          end if ! addition for regional_MPAS, no spec zone update
 
