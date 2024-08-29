@@ -212,6 +212,13 @@ module atm_time_integration
       real (kind=RKIND), dimension(:), pointer :: invAreaCell
       integer, dimension(:), pointer :: bdyMaskCell
       integer, dimension(:), pointer :: bdyMaskEdge
+      real (kind=RKIND), dimension(:,:), pointer :: zz
+      real (kind=RKIND), dimension(:,:,:), pointer :: zb
+      real (kind=RKIND), dimension(:,:,:), pointer :: zb3
+      real (kind=RKIND), dimension(:,:,:), pointer :: zb_cell
+      real (kind=RKIND), dimension(:,:,:), pointer :: zb3_cell
+      real (kind=RKIND), dimension(:), pointer :: fzm
+      real (kind=RKIND), dimension(:), pointer :: fzp
 #endif
 
 
@@ -271,6 +278,27 @@ module atm_time_integration
 
       call mpas_pool_get_array(mesh, 'bdyMaskEdge', bdyMaskEdge)
       !$acc enter data copyin(bdyMaskEdge)
+
+      call mpas_pool_get_array(mesh, 'zz', zz)
+      !$acc enter data copyin(zz)
+
+      call mpas_pool_get_array(mesh, 'zb', zb)
+      !$acc enter data copyin(zb)
+
+      call mpas_pool_get_array(mesh, 'zb3', zb3)
+      !$acc enter data copyin(zb3)
+
+      call mpas_pool_get_array(mesh, 'zb_cell', zb_cell)
+      !$acc enter data copyin(zb_cell)
+
+      call mpas_pool_get_array(mesh, 'zb3_cell', zb3_cell)
+      !$acc enter data copyin(zb3_cell)
+
+      call mpas_pool_get_array(mesh, 'fzm', fzm)
+      !$acc enter data copyin(fzm)
+
+      call mpas_pool_get_array(mesh, 'fzp', fzp)
+      !$acc enter data copyin(fzp)
 #endif
 
    end subroutine mpas_atm_dynamics_init
@@ -319,6 +347,13 @@ module atm_time_integration
       real (kind=RKIND), dimension(:), pointer :: invAreaCell
       integer, dimension(:), pointer :: bdyMaskCell
       integer, dimension(:), pointer :: bdyMaskEdge
+      real (kind=RKIND), dimension(:,:), pointer :: zz
+      real (kind=RKIND), dimension(:,:,:), pointer :: zb
+      real (kind=RKIND), dimension(:,:,:), pointer :: zb3
+      real (kind=RKIND), dimension(:,:,:), pointer :: zb_cell
+      real (kind=RKIND), dimension(:,:,:), pointer :: zb3_cell
+      real (kind=RKIND), dimension(:), pointer :: fzm
+      real (kind=RKIND), dimension(:), pointer :: fzp
 #endif
 
 
@@ -378,6 +413,27 @@ module atm_time_integration
 
       call mpas_pool_get_array(mesh, 'bdyMaskEdge', bdyMaskEdge)
       !$acc exit data delete(bdyMaskEdge)
+
+      call mpas_pool_get_array(mesh, 'zz', zz)
+      !$acc exit data delete(zz)
+
+      call mpas_pool_get_array(mesh, 'zb', zb)
+      !$acc exit data delete(zb)
+
+      call mpas_pool_get_array(mesh, 'zb3', zb3)
+      !$acc exit data delete(zb3)
+
+      call mpas_pool_get_array(mesh, 'zb_cell', zb_cell)
+      !$acc exit data delete(zb_cell)
+
+      call mpas_pool_get_array(mesh, 'zb3_cell', zb3_cell)
+      !$acc exit data delete(zb3_cell)
+
+      call mpas_pool_get_array(mesh, 'fzm', fzm)
+      !$acc exit data delete(fzm)
+
+      call mpas_pool_get_array(mesh, 'fzp', fzp)
+      !$acc exit data delete(fzp)
 #endif
 
    end subroutine mpas_atm_dynamics_finalize
