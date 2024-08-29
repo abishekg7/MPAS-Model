@@ -2815,6 +2815,18 @@ module atm_time_integration
       integer :: i, iCell, iEdge, k, cell1, cell2
       real (kind=RKIND) :: invNs, rcv, p0, flux
 
+      MPAS_ACC_TIMER_START('atm_recover_large_step_variables [ACC_data_xfer]')
+      !$acc enter data copyin(rho_p_save,rho_pp,rho_base,rw_save,rw_p, &
+      !$acc                   rtheta_p_save,rtheta_pp,rtheta_base, &
+      !$acc                   ru_save,ru_p) &
+      !$acc            create(rho_zz,rho_p,rw,w,rtheta_p,theta_m, &
+      !$acc                   ru,u) &
+      !$acc            copyin(wwAvg,ruAvg)
+      if (rk_step == 3) then
+         !$acc enter data copyin(rt_diabatic_tend,exner_base) &
+         !$acc            create(exner,pressure_p)
+      end if
+      MPAS_ACC_TIMER_STOP('atm_recover_large_step_variables [ACC_data_xfer]')
 
       rcv = rgas/(cp-rgas)
       p0 = 1.0e+05  ! this should come from somewhere else...
@@ -2957,6 +2969,19 @@ module atm_time_integration
 
       end do
       !$acc end parallel
+
+      MPAS_ACC_TIMER_START('atm_recover_large_step_variables [ACC_data_xfer]')
+      !$acc exit data delete(rho_p_save,rho_pp,rho_base,rw_save,rw_p, &
+      !$acc                   rtheta_p_save,rtheta_pp,rtheta_base, &
+      !$acc                   ru_save,ru_p) &
+      !$acc            copyout(rho_zz,rho_p,rw,w,rtheta_p,theta_m, &
+      !$acc                   ru,u) &
+      !$acc            copyout(wwAvg,ruAvg)
+      if (rk_step == 3) then
+         !$acc exit data delete(rt_diabatic_tend,exner_base) &
+         !$acc            copyout(exner,pressure_p)
+      end if
+      MPAS_ACC_TIMER_STOP('atm_recover_large_step_variables [ACC_data_xfer]')
 
    end subroutine atm_recover_large_step_variables_work
 
