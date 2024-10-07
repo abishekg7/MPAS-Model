@@ -1730,32 +1730,51 @@ module atm_time_integration
       call mpas_pool_get_array(diag, 'cqw', cqw)
       call mpas_pool_get_array(diag, 'cqu', cqu)
 
+      MPAS_ACC_TIMER_START('atm_compute_moist_coefficients [ACC_data_xfer]')
+      !$acc enter data copyin(qtot, cqw, cqu, scalars)
+      MPAS_ACC_TIMER_STOP('atm_compute_moist_coefficients [ACC_data_xfer]')
+
+
+      !$acc parallel
+      !$acc loop
 !      do iCell = cellSolveStart,cellSolveEnd
       do iCell = cellStart,cellEnd
-         qtot(1:nVertLevels,iCell) = 0.0
+         !$acc loop
          do k = 1,nVertLevels
+            qtot(k,iCell) = 0.0
+            !$acc loop seq
             do iq = moist_start, moist_end
                qtot(k,iCell) = qtot(k,iCell) + scalars(iq, k, iCell)
             end do
          end do
       end do    
+      !$acc end parallel
+
 
 !      do iCell = cellSolveStart,cellSolveEnd
+      !$acc parallel 
+      !$acc loop gang worker
       do iCell = cellStart,cellEnd
+        !$acc loop vector
          do k = 2, nVertLevels
             qtotal = 0.5*(qtot(k,iCell)+qtot(k-1,iCell))
             cqw(k,iCell) = 1.0 / (1.0 + qtotal)
          end do
       end do
+      !$acc end parallel
 
 !  would need to compute qtot for all cells and an openmp barrier to use qtot below.
 
+      !$acc parallel 
+      !$acc loop
       do iEdge = edgeStart,edgeEnd
          cell1 = cellsOnEdge(1,iEdge)
          cell2 = cellsOnEdge(2,iEdge)
          if (cell1 <= nCellsSolve .or. cell2 <= nCellsSolve) then
-            do k = 1, nVertLevels
+            !$acc loop
+            do k = 1, nVertLevels         
                qtotal = 0.0
+               !$acc loop seq
                do iq = moist_start, moist_end
                   qtotal = qtotal + 0.5 * ( scalars(iq, k, cell1) + scalars(iq, k, cell2) )
                end do
@@ -1763,6 +1782,8 @@ module atm_time_integration
             end do
          end if
       end do
+      !$acc end parallel
+      !$acc exit data copyout(cqw, cqu, qtot) delete(scalars)
 
    end subroutine atm_compute_moist_coefficients
 
