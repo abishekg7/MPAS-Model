@@ -55,10 +55,10 @@ module mpas_init_atm_gwd
    real (kind=RKIND), parameter :: Pi = 2.0_RKIND * asin(1.0_RKIND)
    real (kind=RKIND), parameter :: rad2deg = 180.0_RKIND / Pi
 
-   integer, parameter :: topo_x = 43200          ! x-dimension of global 30-arc-second topography array
-   integer, parameter :: topo_y = 21600          ! y-dimension of global 30-arc-second topography array
-   integer, parameter :: tile_x = 1200           ! x-dimension of each tile of global 30-arc-second topography
-   integer, parameter :: tile_y = 1200           ! y-dimension of each tile of global 30-arc-second topography
+   integer, parameter :: topo_x = 43200            ! x-dimension of global 30-arc-second topography array
+   integer, parameter :: topo_y = 21600            ! y-dimension of global 30-arc-second topography array
+   integer, parameter :: tile_x = 1200             ! x-dimension of each tile of global 30-arc-second topography
+   integer, parameter :: tile_y = 1200             ! y-dimension of each tile of global 30-arc-second topography
 
    real (kind=RKIND), parameter :: pts_per_degree = real(topo_x,RKIND) / 360.0_RKIND
 
@@ -392,7 +392,7 @@ module mpas_init_atm_gwd
       character(len=*), intent(in) :: path
       character(len=*), intent(in) :: sub_path
 
-      type(mpas_gwd_tile_type), pointer, intent(out) :: thisTile
+      type(mpas_gwd_tile_type), pointer :: thisTile
 
       integer :: tile_start_x, tile_start_y, tile_start_x_topo
       
@@ -449,7 +449,7 @@ module mpas_init_atm_gwd
       character(len=*), intent(in) :: path
       character(len=*), intent(in) :: sub_path
 
-      type(mpas_gwd_tile_type), pointer, intent(out) :: newTile
+      type(mpas_gwd_tile_type), pointer :: newTile
 
       integer :: iErr
 
