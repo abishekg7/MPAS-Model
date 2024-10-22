@@ -24,12 +24,12 @@ module mpas_init_atm_gwd
    ! A derived type to hold contents of a tile (both topo and landuse)
    type :: mpas_gwd_tile_type
 
-      real (kind=R4KIND), dimension(:,:), pointer :: topo_array
-      integer (kind=I1KIND), dimension(:,:), pointer :: land_array
+      real (kind=R4KIND), dimension(:,:), pointer :: topo_array => null()
+      integer (kind=I1KIND), dimension(:,:), pointer :: landuse_array => null()
       ! coordinates of the tile to be read. 
       ! NB: tile_start_x can be used as is to read landuse tiles, but need an 
       ! adjustment to account for the shifting of topo array start_lon to -180.0.
-      integer :: tile_start_x, tile_start_y  
+      integer :: tile_start_x = -1, tile_start_y = -1
       ! linked list next pointer
       type (mpas_gwd_tile_type), pointer :: next => null()
 
@@ -51,14 +51,14 @@ module mpas_init_atm_gwd
       end subroutine read_geogrid
    end interface
 
-   real (kind=RKIND), parameter :: Re = 6371229.0_RKIND   ! Earth radius in MPAS-Atmosphere
+   real (kind=RKIND), parameter :: Re = 6371229.0_RKIND        ! Earth radius in MPAS-Atmosphere
    real (kind=RKIND), parameter :: Pi = 2.0_RKIND * asin(1.0_RKIND)
    real (kind=RKIND), parameter :: rad2deg = 180.0_RKIND / Pi
 
-   integer, parameter :: topo_x = 43200   ! x-dimension of global 30-arc-second topography array
-   integer, parameter :: topo_y = 21600   ! y-dimension of global 30-arc-second topography array
-   integer, parameter :: tile_x = 1200    ! x-dimension of each tile of global 30-arc-second topography
-   integer, parameter :: tile_y = 1200    ! y-dimension of each tile of global 30-arc-second topography
+   integer, parameter :: topo_x = 43200          ! x-dimension of global 30-arc-second topography array
+   integer, parameter :: topo_y = 21600          ! y-dimension of global 30-arc-second topography array
+   integer, parameter :: tile_x = 1200           ! x-dimension of each tile of global 30-arc-second topography
+   integer, parameter :: tile_y = 1200           ! y-dimension of each tile of global 30-arc-second topography
 
    real (kind=RKIND), parameter :: pts_per_degree = real(topo_x,RKIND) / 360.0_RKIND
 
@@ -170,6 +170,7 @@ module mpas_init_atm_gwd
          case('GMTED2010')
             call mpas_log_write('--- Using GMTED2010 terrain dataset for GWDO static fields')
             geog_sub_path = 'topo_gmted2010_30s/'
+
             ! NB: the GMTED2010 data on disk actually has start_lon = 0.0, but the read_global_30s_topo()
             !     routine will shift the dataset when writing to the topo array so that the start_lon seen
             !     by the rest of this code is -180.0.
@@ -271,7 +272,7 @@ module mpas_init_atm_gwd
          call get_box_size_from_lat_lon(latCell(iCell)*rad2deg, lonCell(iCell)*rad2deg, dc, nx, ny)
  
          call get_box(latCell(iCell)*rad2deg,lonCell(iCell)*rad2deg, nx, ny, &
-                        & geog_data_path, geog_sub_path, tilesHead, box, box_landuse, dxm, box_mean)
+                      geog_data_path, geog_sub_path, tilesHead, box, box_landuse, dxm, box_mean)
 
          !
          ! With a box of 30-arc-second data for the current grid cell, call
@@ -364,7 +365,6 @@ module mpas_init_atm_gwd
       !
       ny = ceiling((180.0 * dx * pts_per_degree) / (Pi * Re))
 
-
    end subroutine get_box_size_from_lat_lon
 
 
@@ -387,11 +387,12 @@ module mpas_init_atm_gwd
 
       implicit none
 
+      type(mpas_gwd_tile_type), pointer, intent(inout) :: tilesHead
       integer, intent(in) :: box_x, box_y
-      type(mpas_gwd_tile_type), pointer, intent(in) :: tilesHead
-      type(mpas_gwd_tile_type), pointer :: thisTile
       character(len=*), intent(in) :: path
       character(len=*), intent(in) :: sub_path
+
+      type(mpas_gwd_tile_type), pointer, intent(out) :: thisTile
 
       integer :: tile_start_x, tile_start_y, tile_start_x_topo
       
@@ -431,27 +432,30 @@ module mpas_init_atm_gwd
    !
    !  function add_tile
    !
-   !> \brief   Routine to read in a new topo and landmask tile
+   !> \brief   Routine to read in a new topo and landuse tile, and add 
+   !>           these tiles to the head of the linked list tilesHead
    !> \author  Abishek Gopal
    !> \date    05 Sep 2024
    !> \details 
-   !>  Routine to read in a new topo and landmask tile, given the tile 
+   !>  Routine to read in a new topo and landuse tile, given the tile 
    !    coordinates
    !-----------------------------------------------------------------------
    function add_tile(tilesHead, tile_start_x, tile_start_y, tile_start_x_topo, path, sub_path) result(newTile)
 
       implicit none
 
-      integer :: iErr
+      type(mpas_gwd_tile_type), pointer, intent(inout) :: tilesHead
       integer, intent(in) :: tile_start_x, tile_start_y, tile_start_x_topo
-      type(mpas_gwd_tile_type), pointer :: tilesHead
       character(len=*), intent(in) :: path
       character(len=*), intent(in) :: sub_path
-      type(mpas_gwd_tile_type), pointer :: newTile
+
+      type(mpas_gwd_tile_type), pointer, intent(out) :: newTile
+
+      integer :: iErr
 
       allocate(newTile)
       allocate(newTile%topo_array(tile_x,tile_y))
-      allocate(newTile%land_array(tile_x,tile_y))
+      allocate(newTile%landuse_array(tile_x,tile_y))
       newTile%tile_start_x = tile_start_x
       newTile%tile_start_y = tile_start_y
       newTile%next => tilesHead
@@ -462,7 +466,7 @@ module mpas_init_atm_gwd
          return
       end if
 
-      iErr = read_30s_landuse_tile(path, sub_path, newTile%land_array, newTile%tile_start_x, newTile%tile_start_y)
+      iErr = read_30s_landuse_tile(path, sub_path, newTile%landuse_array, newTile%tile_start_x, newTile%tile_start_y)
       if (iErr /= 0) then
          call mpas_log_write('Error reading global 30-arc-sec landuse for GWD statistics', messageType=MPAS_LOG_ERR)
          return
@@ -488,9 +492,10 @@ module mpas_init_atm_gwd
 
       implicit none
 
-      integer :: iErr
-      type(mpas_gwd_tile_type), pointer :: tilesHead
+      type(mpas_gwd_tile_type), pointer, intent(inout) :: tilesHead
 
+      integer :: iErr
+      
       type(mpas_gwd_tile_type), pointer :: thisTile
 
       ! loop over tiles
@@ -498,9 +503,9 @@ module mpas_init_atm_gwd
          thisTile => tilesHead
          tilesHead => thisTile % next
          deallocate(thisTile%topo_array)
-         deallocate(thisTile%land_array)
+         deallocate(thisTile%landuse_array)
          deallocate(thisTile)
-      enddo   ! associated(thisTile)
+      end do   ! associated(thisTile)
       
       iErr = 0
 
@@ -524,7 +529,7 @@ module mpas_init_atm_gwd
 
       character(len=*), intent(in) :: path
       character(len=*), intent(in) :: sub_path
-      real(kind=R4KIND), dimension(:,:), pointer :: topo
+      real(kind=R4KIND), dimension(:,:), pointer, intent(inout) :: topo
       integer, intent(in) :: tile_start_x
       integer, intent(in) :: tile_start_y
 
@@ -555,10 +560,8 @@ module mpas_init_atm_gwd
       iy = tile_start_y
       ix = tile_start_x
 
-      !write(filename,'(a,i5.5,a1,i5.5,a1,i5.5,a1,i5.5)') trim(path)//trim(sub_path), tile_start_x, '-', (tile_start_x+tile_x-1), '.', &
-      !tile_start_y, '-', (tile_start_y+tile_y-1)
       write(filename,'(a,i5.5,a1,i5.5,a1,i5.5,a1,i5.5)') trim(path)//trim(sub_path), ix, '-', (ix+tile_x-1), '.', &
-      iy, '-', (iy+tile_y-1)
+                                                         iy, '-', (iy+tile_y-1)
       call mpas_f_to_c_string(filename, c_filename)
       call read_geogrid(c_filename, tile_ptr, nx, ny, nz, isigned, endian, &
                         wordsize, istatus)
@@ -595,7 +598,7 @@ module mpas_init_atm_gwd
 
       character(len=*), intent(in) :: path
       character(len=*), intent(in) :: sub_path
-      integer (kind=I1KIND), dimension(:,:), pointer :: landuse
+      integer (kind=I1KIND), dimension(:,:), pointer, intent(inout) :: landuse
       integer, intent(in) :: tile_start_x
       integer, intent(in) :: tile_start_y
       
@@ -621,7 +624,7 @@ module mpas_init_atm_gwd
       nz = 1
 
       write(filename,'(a,i5.5,a1,i5.5,a1,i5.5,a1,i5.5)') trim(path)//'/landuse_30s/', tile_start_x, '-', (tile_start_x+tile_x-1), '.', &
-      tile_start_y, '-', (tile_start_y+tile_y-1)
+                                                         tile_start_y, '-', (tile_start_y+tile_y-1)
       call mpas_f_to_c_string(filename, c_filename)
       call read_geogrid(c_filename, tile_ptr, nx, ny, nz, isigned, endian, &
                         wordsize, istatus)
@@ -709,7 +712,7 @@ module mpas_init_atm_gwd
       integer, intent(in) :: nx, ny
       character(len=*), intent(in) :: path
       character(len=*), intent(in) :: sub_path
-      type(mpas_gwd_tile_type), pointer, intent(in) :: tilesHead
+      type(mpas_gwd_tile_type), pointer, intent(inout) :: tilesHead
       real (kind=RKIND), dimension(:,:), pointer :: box               ! Subset of topography covering a grid cell
       integer (kind=I1KIND), dimension(:,:), pointer :: box_landuse   ! Subset of landuse covering a grid cell
       real (kind=RKIND), dimension(:,:), pointer :: dxm               ! Size (meters) in zonal direction of a grid cell
@@ -770,13 +773,14 @@ module mpas_init_atm_gwd
          ix = (ii - thisTile%tile_start_x) + 1
          jx = (jj - thisTile%tile_start_y) + 1
          box(i,j) = thisTile%topo_array(ix, jx)
-         box_landuse(i,j) = thisTile%land_array(ix, jx)
+         box_landuse(i,j) = thisTile%landuse_array(ix, jx)
          sg_lat = (start_lat + (real(jj-1,RKIND) + 0.5) / pts_per_degree) / rad2deg  ! Add 0.5 for cell center
          dxm(i,j) = sg_delta * cos(sg_lat)
          box_mean = box_mean + box(i,j)
 
       end do
       end do
+
 
       !
       ! Compute mean topography in the extracted box
