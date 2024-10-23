@@ -1904,7 +1904,7 @@ module atm_time_integration
       rcv = rgas/(cp-rgas)
       c2 = cp*rcv
 
-      !$acc parallel 
+      !$acc parallel
       !$acc loop
 ! MGD bad to have all threads setting this variable?
       do k=1,nVertLevels
@@ -1912,8 +1912,8 @@ module atm_time_integration
       end do
       !$acc end parallel 
       
-      !$acc parallel
-      !$acc loop
+      !$acc parallel 
+      !$acc loop gang worker private(b_tri,c_tri)
       do iCell = cellSolveStart,cellSolveEnd  !  we only need to do cells we are solving for, not halo cells
 
 !DIR$ IVDEP
@@ -1944,24 +1944,24 @@ module atm_time_integration
                                 *p(k,iCell)/((rtb(k,iCell)+rt(k,iCell))*pb(k,iCell))
 !            cofwt(k,iCell) = 0.
          end do
-      end do
-      !$acc end parallel 
+         !end do
+         !!$acc end parallel 
 
-      !a_tri(1,iCell) = 0.  ! note, this value is never used
-      b_tri(1) = 1.    ! note, this value is never used
-      c_tri(1) = 0.    ! note, this value is never used
+         !a_tri(1,iCell) = 0.  ! note, this value is never used
+         !b_tri(1) = 1.    ! note, this value is never used
+         !c_tri(1) = 0.    ! note, this value is never used
 
-      !$acc update device(b_tri,c_tri)
+         ! !$acc update device(b_tri,c_tri)
       
-      !$acc parallel 
-      !$acc loop gang worker private(b_tri,c_tri)
-      do iCell = cellSolveStart,cellSolveEnd  !  we only need to do cells we are solving for, not halo cells   
+         !!$acc parallel 
+         !!$acc loop gang worker private(b_tri,c_tri)
+         !do iCell = cellSolveStart,cellSolveEnd  !  we only need to do cells we are solving for, not halo cells   
 
-      a_tri(1,iCell) = 0.  ! note, this value is never used
-      !b_tri(1,iCell) = 1.    ! note, this value is never used
-      !c_tri(1,iCell) = 0.    ! note, this value is never used
-      gamma_tri(1,iCell) = 0.
-      alpha_tri(1,iCell) = 0.  ! note, this value is never used
+         a_tri(1,iCell) = 0.  ! note, this value is never used
+         b_tri(1) = 1.    ! note, this value is never used
+         c_tri(1) = 0.    ! note, this value is never used
+         gamma_tri(1,iCell) = 0.
+         alpha_tri(1,iCell) = 0.  ! note, this value is never used
 
 
 !DIR$ IVDEP
