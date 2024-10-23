@@ -1969,7 +1969,6 @@ module atm_time_integration
                          -cofwr(k  ,iCell)* cofrz(k    )                       &
                          +cofwt(k  ,iCell)* coftz(k+1,iCell)*rdzw(k  )
          end do
-      
 !MGD VECTOR DEPENDENCE
          !$acc loop seq
          do k=2,nVertLevels
