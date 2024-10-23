@@ -1893,10 +1893,12 @@ module atm_time_integration
       integer :: iCell, k, iq
       real (kind=RKIND) :: dtseps, c2, qtotal, rcv
       real (kind=RKIND), dimension( nVertLevels ) :: b_tri, c_tri
-      !real (kind=RKIND), dimension( nVertLevels,nCells+1 ) :: b_tri, c_tri
 
       MPAS_ACC_TIMER_START('atm_compute_vert_imp_coefs_work [ACC_data_xfer]')
-      !$acc enter data copyin(rdzw, zz, fzm, fzp, rdzu, cqw, p, t, qtot, rb, rtb, rt, pb) create(cofrz, cofwr, cofwz, coftz, cofwt, a_tri, b_tri, c_tri, alpha_tri, gamma_tri)
+      !$acc enter data copyin(rdzw, zz, fzm, fzp, rdzu, cqw, p, t, qtot, rb, &
+      !$acc                   rtb, rt, pb)
+      !$acc enter data create(cofrz, cofwr, cofwz, coftz, cofwt, a_tri, b_tri, &
+      !$acc                   c_tri, alpha_tri, gamma_tri)
       MPAS_ACC_TIMER_STOP('atm_compute_vert_imp_coefs_work [ACC_data_xfer]')
 
       !  set coefficients
@@ -1944,25 +1946,12 @@ module atm_time_integration
                                 *p(k,iCell)/((rtb(k,iCell)+rt(k,iCell))*pb(k,iCell))
 !            cofwt(k,iCell) = 0.
          end do
-         !end do
-         !!$acc end parallel 
-
-         !a_tri(1,iCell) = 0.  ! note, this value is never used
-         !b_tri(1) = 1.    ! note, this value is never used
-         !c_tri(1) = 0.    ! note, this value is never used
-
-         ! !$acc update device(b_tri,c_tri)
-      
-         !!$acc parallel 
-         !!$acc loop gang worker private(b_tri,c_tri)
-         !do iCell = cellSolveStart,cellSolveEnd  !  we only need to do cells we are solving for, not halo cells   
 
          a_tri(1,iCell) = 0.  ! note, this value is never used
          b_tri(1) = 1.    ! note, this value is never used
          c_tri(1) = 0.    ! note, this value is never used
          gamma_tri(1,iCell) = 0.
          alpha_tri(1,iCell) = 0.  ! note, this value is never used
-
 
 !DIR$ IVDEP
          !$acc loop vector
@@ -1991,7 +1980,9 @@ module atm_time_integration
       end do ! loop over cells
       !$acc end parallel 
 
-      !$acc exit data copyout(cofrz, cofwr, cofwz, coftz, cofwt, a_tri, b_tri, c_tri, alpha_tri, gamma_tri) delete(rdzw, zz, fzm, fzp, rdzu, cqw, p, t, qtot, rb, rtb, rt, pb)
+      !$acc exit data copyout(cofrz, cofwr, cofwz, coftz, cofwt, a_tri, b_tri, &
+      !$acc                   c_tri, alpha_tri, gamma_tri)
+      !$acc exit data delete(rdzw, zz, fzm, fzp, rdzu, cqw, p, t, qtot, rb, rtb, rt, pb)
 
    end subroutine atm_compute_vert_imp_coefs_work
 
