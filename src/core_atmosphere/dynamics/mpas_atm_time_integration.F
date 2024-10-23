@@ -1893,26 +1893,37 @@ module atm_time_integration
       integer :: iCell, k, iq
       real (kind=RKIND) :: dtseps, c2, qtotal, rcv
       real (kind=RKIND), dimension( nVertLevels ) :: b_tri, c_tri
+      !real (kind=RKIND), dimension( nVertLevels,nCells+1 ) :: b_tri, c_tri
 
+      MPAS_ACC_TIMER_START('atm_compute_vert_imp_coefs_work [ACC_data_xfer]')
+      !$acc enter data copyin(rdzw, zz, fzm, fzp, rdzu, cqw, p, t, qtot, rb, rtb, rt, pb) create(cofrz, cofwr, cofwz, coftz, cofwt, a_tri, b_tri, c_tri, alpha_tri, gamma_tri)
+      MPAS_ACC_TIMER_STOP('atm_compute_vert_imp_coefs_work [ACC_data_xfer]')
 
       !  set coefficients
       dtseps = .5*dts*(1.+epssm)
       rcv = rgas/(cp-rgas)
       c2 = cp*rcv
 
+      !$acc parallel 
+      !$acc loop
 ! MGD bad to have all threads setting this variable?
       do k=1,nVertLevels
          cofrz(k) = dtseps*rdzw(k)
       end do
-
+      !$acc end parallel 
+      
+      !$acc parallel
+      !$acc loop
       do iCell = cellSolveStart,cellSolveEnd  !  we only need to do cells we are solving for, not halo cells
 
 !DIR$ IVDEP
+         !$acc loop
          do k=2,nVertLevels
             cofwr(k,iCell) =.5*dtseps*gravity*(fzm(k)*zz(k,iCell)+fzp(k)*zz(k-1,iCell))
          end do
          coftz(1,iCell) = 0.0
 !DIR$ IVDEP
+         !$acc loop
          do k=2,nVertLevels
             cofwz(k,iCell) = dtseps*c2*(fzm(k)*zz(k,iCell)+fzp(k)*zz(k-1,iCell))  &
                  *rdzu(k)*cqw(k,iCell)*(fzm(k)*p (k,iCell)+fzp(k)*p (k-1,iCell))
@@ -1920,6 +1931,7 @@ module atm_time_integration
          end do
          coftz(nVertLevels+1,iCell) = 0.0
 !DIR$ IVDEP
+         !$acc loop
          do k=1,nVertLevels
 
 !            qtotal = 0.
@@ -1932,14 +1944,28 @@ module atm_time_integration
                                 *p(k,iCell)/((rtb(k,iCell)+rt(k,iCell))*pb(k,iCell))
 !            cofwt(k,iCell) = 0.
          end do
+      end do
+      !$acc end parallel 
 
-         a_tri(1,iCell) = 0.  ! note, this value is never used
-         b_tri(1) = 1.    ! note, this value is never used
-         c_tri(1) = 0.    ! note, this value is never used
-         gamma_tri(1,iCell) = 0.
-         alpha_tri(1,iCell) = 0.  ! note, this value is never used
+      !a_tri(1,iCell) = 0.  ! note, this value is never used
+      b_tri(1) = 1.    ! note, this value is never used
+      c_tri(1) = 0.    ! note, this value is never used
+
+      !$acc update device(b_tri,c_tri)
+      
+      !$acc parallel 
+      !$acc loop gang worker private(b_tri,c_tri)
+      do iCell = cellSolveStart,cellSolveEnd  !  we only need to do cells we are solving for, not halo cells   
+
+      a_tri(1,iCell) = 0.  ! note, this value is never used
+      !b_tri(1,iCell) = 1.    ! note, this value is never used
+      !c_tri(1,iCell) = 0.    ! note, this value is never used
+      gamma_tri(1,iCell) = 0.
+      alpha_tri(1,iCell) = 0.  ! note, this value is never used
+
 
 !DIR$ IVDEP
+         !$acc loop vector
          do k=2,nVertLevels
             a_tri(k,iCell) = -cofwz(k  ,iCell)* coftz(k-1,iCell)*rdzw(k-1)*zz(k-1,iCell)   &
                          +cofwr(k  ,iCell)* cofrz(k-1  )                       &
@@ -1954,13 +1980,18 @@ module atm_time_integration
                          -cofwr(k  ,iCell)* cofrz(k    )                       &
                          +cofwt(k  ,iCell)* coftz(k+1,iCell)*rdzw(k  )
          end do
+      
 !MGD VECTOR DEPENDENCE
+         !$acc loop seq
          do k=2,nVertLevels
             alpha_tri(k,iCell) = 1./(b_tri(k)-a_tri(k,iCell)*gamma_tri(k-1,iCell))
             gamma_tri(k,iCell) = c_tri(k)*alpha_tri(k,iCell)
          end do
 
       end do ! loop over cells
+      !$acc end parallel 
+
+      !$acc exit data copyout(cofrz, cofwr, cofwz, coftz, cofwt, a_tri, b_tri, c_tri, alpha_tri, gamma_tri) delete(rdzw, zz, fzm, fzp, rdzu, cqw, p, t, qtot, rb, rtb, rt, pb)
 
    end subroutine atm_compute_vert_imp_coefs_work
 
