@@ -8,20 +8,20 @@ create_run_directory() {
     echo "Directory $1 already exists."
   fi
 
-pushd "$1"
+  pushd "$1"
 
-ln -sf ../../atmosphere_model . 
-echo "Symbolic link to compiled program created in $testDirectory"
+  ln -sf ../../atmosphere_model . 
+  echo "Symbolic link to compiled program created in $testDirectory"
 
-ln -s /glade/derecho/scratch/agopal/jw_input/x1.40962.init.nc .
-ln -s /glade/derecho/scratch/agopal/jw_input/x1.40962.grid.nc .
-ln -s /glade/derecho/scratch/agopal/jw_input/x1.40962.graph.info.part.* .
+  ln -s /glade/derecho/scratch/agopal/jw_input/x1.40962.init.nc .
+  ln -s /glade/derecho/scratch/agopal/jw_input/x1.40962.grid.nc .
+  ln -s /glade/derecho/scratch/agopal/jw_input/x1.40962.graph.info.part.* .
 
-cp /glade/derecho/scratch/agopal/jw_input/stream_list.atmosphere.output .
-cp /glade/derecho/scratch/agopal/jw_input/streams.atmosphere .
-cp /glade/derecho/scratch/agopal/jw_input/namelist.atmosphere .
+  cp /glade/derecho/scratch/agopal/jw_input/stream_list.atmosphere.output .
+  cp /glade/derecho/scratch/agopal/jw_input/streams.atmosphere .
+  cp /glade/derecho/scratch/agopal/jw_input/namelist.atmosphere .
 
-popd  
+  popd  
 }
 
 
@@ -76,9 +76,7 @@ write_pbs_script() {
   local walltime=$2
   local nodes=$3
   local ppn=$4
-  local output_file=$5
-  local error_file=$6
-  local script_file=$7
+  local script_file=$5
 
   cat <<EOF > $script_file
 #!/bin/bash
@@ -87,10 +85,8 @@ write_pbs_script() {
 #PBS -l job_priority=premium
 #PBS -N $job_name
 #PBS -l walltime=$walltime
-#PBS -l select=1:ncpus=64:mpiprocs=24
+#PBS -l select=$nodes:ncpus=64:mpiprocs=$ppn
 ##PBS -l nodes=$nodes:ppn=$ppn
-#PBS -o $output_file
-#PBS -e $error_file
 
 module --force purge
 ml ncarenv/23.09
@@ -102,11 +98,11 @@ ml parallel-netcdf
 ml cuda
 
 which nsys
-echo $PATH
+echo \$PATH
 
 cd \$PBS_O_WORKDIR
 
-mpiexec -n 16 ./atmosphere_model 
+mpiexec -n $ppn ./atmosphere_model 
 EOF
 
   echo "PBS job script written to $script_file"
@@ -161,6 +157,109 @@ nml_replace(){
 }
 
 
+run_base_exp(){
+  create_run_directory base
+  pushd base
+
+  new_name="output_base.nc"
+  # Use sed to find <stream name="output"> and replace the value of filename_template
+  sed -i '/<stream name="output"/,/<\/stream>/s/\(filename_template="\)[^"]*\(".*\)/\1'"$new_name"'\2/' streams.atmosphere
+  #sed '/'$STREAM_BEGIN'/,/'$STREAM_END'/s/\('$KEY'="\)[^"]*\(".*\)/\1'"$VALUE"'\2/' < ${FILE} > ${FILE}.out
+
+
+  rest_interval="01:00:00"
+  sed -i '/<immutable_stream name="restart"/,/<\/>/s/\(output_interval="\)[^"]*\(".*\)/\1'"$rest_interval"'\2/' streams.atmosphere
+
+  out_interval="02:00:00"
+  sed -i '/<stream name="output"/,/<\/stream>/s/\(output_interval="\)[^"]*\(".*\)/\1'"$out_interval"'\2/' streams.atmosphere
+
+
+  write_pbs_script "my_job" "02:00:00" 1 16 "job_script.pbs"
+
+  submit_and_check_pbs_job "job_script.pbs"
+
+  run_result=$?
+
+  if [ $run_result -ne 0 ]; then
+    echo "Failed to run the base simulation"
+    exit 1
+  fi
+
+  popd
+
+}
+
+run_parallel_test(){
+  create_run_directory parallel
+  pushd parallel
+
+  new_name="output_restart.nc"
+  # Use sed to find <stream name="output"> and replace the value of filename_template
+  sed -i '/<stream name="output"/,/<\/stream>/s/\(filename_template="\)[^"]*\(".*\)/\1'"$new_name"'\2/' streams.atmosphere
+  #sed '/'$STREAM_BEGIN'/,/'$STREAM_END'/s/\('$KEY'="\)[^"]*\(".*\)/\1'"$VALUE"'\2/' < ${FILE} > ${FILE}.out
+
+
+  rest_interval="02:00:00"
+  sed -i '/<immutable_stream name="restart"/,/<\/>/s/\(output_interval="\)[^"]*\(".*\)/\1'"$rest_interval"'\2/' streams.atmosphere
+
+  out_interval="02:00:00"
+  sed -i '/<stream name="output"/,/<\/stream>/s/\(output_interval="\)[^"]*\(".*\)/\1'"$out_interval"'\2/' streams.atmosphere
+
+
+  write_pbs_script "my_job" "02:00:00" 1 24 "job_script.pbs"
+
+  submit_and_check_pbs_job "job_script.pbs"
+
+  run_result=$?
+
+  if [ $run_result -ne 0 ]; then
+    echo "Failed to run the parallel simulation"
+    exit 1
+  fi
+
+  popd
+  compare_netcdf_files "base/restart.0000-01-01_02.00.00.nc" "parallel/restart.0000-01-01_02.00.00.nc"
+  echo "TEST $(basename $0) PASS"
+
+}
+
+run_restart_test()
+{
+  create_run_directory restart
+  pushd restart
+
+  ln -s ../base/restart.0000-01-01_01.00.00.nc .
+
+  new_start_time='0000-01-01_01:00:00'
+  nml_replace 'config_start_time' "$new_start_time" namelist.atmosphere
+  new_run_duration='01:00:00'
+  nml_replace 'config_run_duration' "$new_run_duration" namelist.atmosphere
+  do_restart='true'
+  nml_replace 'config_do_restart' "$do_restart" namelist.atmosphere
+  
+  rest_interval="01:00:00"
+  sed -i '/<immutable_stream name="restart"/,/<\/>/s/\(output_interval="\)[^"]*\(".*\)/\1'"$rest_interval"'\2/' streams.atmosphere
+
+  out_interval="02:00:00"
+  sed -i '/<stream name="output"/,/<\/stream>/s/\(output_interval="\)[^"]*\(".*\)/\1'"$out_interval"'\2/' streams.atmosphere
+
+  new_name="output_rest.nc"
+  sed -i '/<stream name="output"/,/<\/stream>/s/\(filename_template="\)[^"]*\(".*\)/\1'"$new_name"'\2/' streams.atmosphere
+
+
+  write_pbs_script "my_job" "02:00:00" 1 16 "job_script.pbs"
+  submit_and_check_pbs_job "job_script.pbs"
+  run_result=$?
+  if [ $run_result -ne 0 ]; then
+    echo "Failed to run the compiled program"
+    exit 1
+  fi
+
+  popd
+  compare_netcdf_files "base/restart.0000-01-01_02.00.00.nc" "restart/restart.0000-01-01_02.00.00.nc"
+  echo "TEST $(basename $0) PASS"
+
+}
 
 
 
@@ -169,10 +268,6 @@ help()
   echo "./run_experiments.sh as_host workingdir [options] [-- <hostenv.sh options>]"
   echo "  as_host                   First argument must be the host configuration to use for environment loading"
   echo "  workingdir                Second argument must be the working dir to immediate cd to"
-  echo "  -b                        Additional make arguments passed in"
-  echo "  -c                        Core to build"
-  echo "  -t                        Target configuration (gnu, intel, etc)"
-  echo "  -d                        Debug build"
   echo "  -e                        environment variables in comma-delimited list, e.g. var=1,foo,bar=0"
   echo "  -- <hostenv.sh options>   Directly pass options to hostenv.sh, equivalent to hostenv.sh <options>"
   echo "  -h                  Print this message"
@@ -199,20 +294,8 @@ cd $workingDirectory
 # Get some helper functions, AS_HOST must be set by this point to work
 . .ci/env/helpers.sh
 
-while getopts b:c:t:de:h opt; do
+while getopts e:h opt; do
   case $opt in
-    b)
-      buildCommand="$OPTARG"
-    ;;
-    c)
-      core="$OPTARG"
-    ;;
-    t)
-      target="$OPTARG"
-    ;;
-    d)
-      debug="DEBUG=true"
-    ;;
     e)
       envVars="$envVars,$OPTARG"
     ;;
@@ -235,100 +318,16 @@ if [ ! -z "$envVars" ]; then
   setenvStr "$envVars"
 fi
 
-# Re-evaluate input values for delayed expansion
-eval "core=\"$core\""
-eval "target=\"$target\""
-eval "buildCommand=\"$buildCommand\""
-
-
 testDirectory="$workingDirectory"/test
 #create_run_directory "$testDirectory"
 mkdir -p "$testDirectory"
 pushd "$testDirectory"
 
-create_run_directory base
-pushd base
+run_base_exp
 
-#stream_replace "<stream name="output">" "<\/stream>" "filename_template" "output_base.nc" streams.atmosphere
+run_restart_test
 
-new_name="output_base.nc"
-# Use sed to find <stream name="output"> and replace the value of filename_template
-sed -i '/<stream name="output"/,/<\/stream>/s/\(filename_template="\)[^"]*\(".*\)/\1'"$new_name"'\2/' streams.atmosphere
-#sed '/'$STREAM_BEGIN'/,/'$STREAM_END'/s/\('$KEY'="\)[^"]*\(".*\)/\1'"$VALUE"'\2/' < ${FILE} > ${FILE}.out
-
-
-rest_interval="01:00:00"
-sed -i '/<immutable_stream name="restart"/,/<\/>/s/\(output_interval="\)[^"]*\(".*\)/\1'"$rest_interval"'\2/' streams.atmosphere
-
-out_interval="02:00:00"
-sed -i '/<stream name="output"/,/<\/stream>/s/\(output_interval="\)[^"]*\(".*\)/\1'"$out_interval"'\2/' streams.atmosphere
-
-
-write_pbs_script "my_job" "02:00:00" 2 16 "output.log" "error.log" "job_script.pbs"
-
-submit_and_check_pbs_job "job_script.pbs"
-
-run_result=$?
-
-if [ $run_result -ne 0 ]; then
-  echo "Failed to run the compiled program"
-  exit 1
-fi
-
-popd
-
-create_run_directory restart
-pushd restart
-
-ln -s ../base/restart.0000-01-01_01.00.00.nc .
-
-
-
-new_start_time='0000-01-01_01:00:00'
-nml_replace 'config_start_time' "$new_start_time" namelist.atmosphere
-#sed -i 's/\(config_start_time\s*=\s*\).*/\1'"$new_start_time"'/' namelist.atmosphere
-new_run_duration='01:00:00'
-nml_replace 'config_run_duration' "$new_run_duration" namelist.atmosphere
-#sed -i 's/\(config_run_duration\s*=\s*\).*/\1'"$new_run_duration"'/' namelist.atmosphere
-
-do_restart='true'
-nml_replace 'config_do_restart' "$do_restart" namelist.atmosphere
-#sed -i 's/\(config_do_restart\s*=\s*\).*/\1'"$do_restart"'/' namelist.atmosphere
-
-
-rest_interval="01:00:00"
-sed -i '/<immutable_stream name="restart"/,/<\/>/s/\(output_interval="\)[^"]*\(".*\)/\1'"$rest_interval"'\2/' streams.atmosphere
-
-out_interval="02:00:00"
-sed -i '/<stream name="output"/,/<\/stream>/s/\(output_interval="\)[^"]*\(".*\)/\1'"$out_interval"'\2/' streams.atmosphere
-
-
-new_name="output_rest.nc"
-sed -i '/<stream name="output"/,/<\/stream>/s/\(filename_template="\)[^"]*\(".*\)/\1'"$new_name"'\2/' streams.atmosphere
-
-
-write_pbs_script "my_job" "02:00:00" 2 16 "output.log" "error.log" "job_script.pbs"
-
-submit_and_check_pbs_job "job_script.pbs"
-
-
-echo "Running the compiled program"
-#./atmosphere_model # Replace with the actual name of the compiled program
-run_result=$?
-
-if [ $run_result -ne 0 ]; then
-  echo "Failed to run the compiled program"
-  exit 1
-fi
-
-popd
-
-
-pwd
-
-
-compare_netcdf_files "base/restart.0000-01-01_02.00.00.nc" "restart/restart.0000-01-01_02.00.00.nc"
-
+run_parallel_test
 
 echo "TEST $(basename $0) PASS"
 
