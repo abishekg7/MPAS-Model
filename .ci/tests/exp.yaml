@@ -1,0 +1,48 @@
+version: '0.1'
+tests:
+  - name: Dycore only test
+    description: This is a sample test case
+    inputs:
+      model: ../../atmosphere_model
+      grid: /glade/derecho/scratch/agopal/jw_input/x1.40962.grid.nc
+      init: /glade/derecho/scratch/agopal/jw_input/x1.40962.init.nc
+      nml: /glade/derecho/scratch/agopal/jw_input/namelist.atmosphere
+      stream: /glade/derecho/scratch/agopal/jw_input/streams.atmosphere
+      stream_out: /glade/derecho/scratch/agopal/jw_input/stream_list.atmosphere.output
+      partition: /glade/derecho/scratch/agopal/jw_input/x1.40962.graph.info.part.*
+    steps:
+      base:
+        update_stream:
+          restart:
+            output_interval: 01:00:00
+          output:
+            output_interval: 02:00:00
+            filename_template: output_base
+      restart:
+        symlink: ../base/restart.0000-01-01_01.00.00.nc
+        update_nml:
+          config_start_time : '0000-01-01_01:00:00'
+          config_run_duration : '01:00:00'
+          config_do_restart : 'true'
+        update_stream:
+          restart:
+            output_interval: 01:00:00
+          output:
+            output_interval: 01:00:00
+            filename_template: output_restart
+        compare: restart.0000-01-01_02.00.00.nc
+      parallel:
+        update_stream:
+          restart:
+            output_interval: 02:00:00
+          output:
+            output_interval: 02:00:00
+            filename_template: output_parallel
+        job_params:
+          ntasks: 4
+          nthreads: 1
+          ncores: 4
+          job_walltime: 00:30:00
+          job_queue: regular
+          job_account: P93300642
+          job_name: test
