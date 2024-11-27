@@ -759,6 +759,15 @@ endif
 	LIBS += $(NCLIB)
 endif
 
+FCINCLUDES += -I/glade/derecho/scratch/agopal/serialbox_2.6.2_2/install/include \
+           -I/glade/derecho/scratch/agopal/serialbox_2.6.2_2/src \
+           -isystem /glade/derecho/scratch/agopal/boost_1_86_0/install/include
+
+SERLIB = libsimple_m_ser.a
+
+#LIBS +=  -L/glade/derecho/scratch/agopal/serialbox_2.6.2_2/install/lib -lSerialboxFortran -lSerialboxC -lSerialboxCore -lpthread
+LIBS +=  -Wl,-rpath,: /glade/derecho/scratch/agopal/serialbox_2.6.2_2/install/lib/libSerialboxFortran.a \
+           /glade/derecho/scratch/agopal/serialbox_2.6.2_2/install/lib/libSerialboxC.a /glade/derecho/scratch/agopal/serialbox_2.6.2_2/install/lib/libSerialboxCore.a
 
 ifneq "$(PNETCDF)" ""
 ifneq ($(wildcard $(PNETCDF)/lib), )
@@ -857,6 +866,8 @@ ifeq "$(OPENMP_OFFLOAD)" "true"
 	override CPPFLAGS += "-DMPAS_OPENMP_OFFLOAD"
 	LDFLAGS += $(LDFLAGS_GPU)
 endif #OPENMP_OFFLOAD IF
+
+FFLAGS += "-DSERIALIZE"
 
 ifneq (,$(filter-out double single,$(PRECISION)))
 $(error PRECISION should be "", "single", or "double"; received value "$(PRECISION)")

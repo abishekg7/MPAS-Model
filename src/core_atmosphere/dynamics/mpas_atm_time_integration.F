@@ -15,7 +15,12 @@
 #endif
 
 module atm_time_integration
-
+   USE m_ser, ONLY: ser_init, ser_array
+   USE m_serialize, ONLY: fs_add_savepoint_metainfo, fs_read_field, fs_create_savepoint, fs_write_field
+   USE utils_ppser, ONLY: ppser_set_mode, ppser_initialize, ppser_get_mode, ppser_savepoint, &
+       ppser_serializer, ppser_serializer_ref, ppser_intlength, ppser_reallength, &
+       ppser_realtype, ppser_zrperturb
+   use mpas_timekeeping
    use mpas_derived_types
    use mpas_pool_routines
    use mpas_kind_types
@@ -410,7 +415,8 @@ module atm_time_integration
       real (kind=RKIND) :: Time_new
       type (mpas_pool_type), pointer :: state
       character (len=StrKIND), pointer :: config_time_integration
-
+      character(len=StrKIND) :: timeStamp
+      character(len=StrKIND) :: savepoint_name
 
       clock => domain % clock
       block => domain % blocklist
@@ -418,6 +424,11 @@ module atm_time_integration
       call mpas_pool_get_config(block % configs, 'config_time_integration', config_time_integration)
       call mpas_pool_get_config(block % configs, 'config_apply_lbcs', config_apply_lbcs)
 
+      call mpas_get_time(nowTime, dateTimeString=xtime_new)
+      savepoint_name='minee'
+      CALL ser_init('init')
+      call fs_create_savepoint(TRIM(savepoint_name), ppser_savepoint)
+      call fs_add_savepoint_metainfo(ppser_savepoint, 'datetime', TRIM(xtime_new))
       if (trim(config_time_integration) == 'SRK3') then
          call atm_srk3(domain, dt, itimestep, exchange_halo_group)
       else
@@ -1865,13 +1876,39 @@ module atm_time_integration
       integer :: iCell, k, iq
       real (kind=RKIND) :: dtseps, c2, qtotal, rcv
       real (kind=RKIND), dimension( nVertLevels ) :: b_tri, c_tri
-
+      REAL(KIND=8), DIMENSION(5,5,5) :: av
 
       !  set coefficients
       dtseps = .5*dts*(1.+epssm)
       rcv = rgas/(cp-rgas)
       c2 = cp*rcv
 
+      av = 5.0
+
+      !CALL myserialize(av)
+      ! CALL ser_init('minee')
+      ! call fs_create_savepoint(TRIM(savepoint_name), ppser_savepoint)
+      ! call fs_add_savepoint_metainfo(ppser_savepoint, 'date', TRIM(date))
+
+
+      ! setup serialization environment
+      ! call ppser_initialize(directory='.',prefix='SerialboxTest')
+      ! call fs_create_savepoint('sp1', ppser_savepoint)
+      ! call ppser_set_mode(0)
+  
+      ! SELECT CASE ( ppser_get_mode() )
+      !   CASE(0)
+      !     call fs_write_field(ppser_serializer, ppser_savepoint, 'ser_a', qtotal)
+      !   CASE(1)
+      !     call fs_read_field(ppser_serializer_ref, ppser_savepoint, 'ser_a', qtotal)
+      !   CASE(2)
+      !     call fs_read_field(ppser_serializer_ref, ppser_savepoint, 'ser_a', qtotal, &
+      !                                                            ppser_zrperturb)
+      ! END SELECT
+
+      !CALL ser_array_d_3d('vara', scalars, 0)
+      !$acc enter data create(alpha_tri)
+      !CALL ser_array('alpha_tri', alpha_tri, 0)
 ! MGD bad to have all threads setting this variable?
       do k=1,nVertLevels
          cofrz(k) = dtseps*rdzw(k)
@@ -1933,6 +1970,9 @@ module atm_time_integration
          end do
 
       end do ! loop over cells
+      !$acc update device(alpha_tri)
+      CALL ser_array('alpha_tri', alpha_tri, 0)
+      !$acc exit data delete(alpha_tri)
 
    end subroutine atm_compute_vert_imp_coefs_work
 
@@ -3140,6 +3180,7 @@ module atm_time_integration
       !$acc enter data copyin(uhAvg, scalar_new)
       MPAS_ACC_TIMER_STOP('atm_advance_scalars [ACC_data_xfer]')
 
+      CALL ser_array('scalar_new', scalar_new, 0)
       !$acc parallel async
       !$acc loop gang worker private(scalar_weight2, ica)
       do iEdge=edgeStart,edgeEnd
