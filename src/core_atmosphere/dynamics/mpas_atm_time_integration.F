@@ -1907,8 +1907,13 @@ module atm_time_integration
       ! END SELECT
 
       !CALL ser_array_d_3d('vara', scalars, 0)
-      !$acc enter data create(alpha_tri)
+      !!$acc enter data create(alpha_tri)
       !CALL ser_array('alpha_tri', alpha_tri, 0)
+
+      !$ser init directory='.' prefix='SerialboxTest'
+      !$ser savepoint sp1
+      !$ser mode write
+      !$ser accdata alpha_tri=alpha_tri
 ! MGD bad to have all threads setting this variable?
       do k=1,nVertLevels
          cofrz(k) = dtseps*rdzw(k)
@@ -1970,9 +1975,9 @@ module atm_time_integration
          end do
 
       end do ! loop over cells
-      !$acc update device(alpha_tri)
-      CALL ser_array('alpha_tri', alpha_tri, 0)
-      !$acc exit data delete(alpha_tri)
+      !!$acc update device(alpha_tri)
+      !CALL ser_array('alpha_tri', alpha_tri, 0)
+      !!$acc exit data delete(alpha_tri)
 
    end subroutine atm_compute_vert_imp_coefs_work
 
