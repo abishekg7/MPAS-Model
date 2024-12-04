@@ -481,10 +481,13 @@ module atm_time_integration
       call mpas_pool_get_config(block % configs, 'config_apply_lbcs', config_apply_lbcs)
 
       call mpas_get_time(nowTime, dateTimeString=xtime_new)
-      savepoint_name='minee'
-      CALL ser_init('init')
-      call fs_create_savepoint(TRIM(savepoint_name), ppser_savepoint)
-      call fs_add_savepoint_metainfo(ppser_savepoint, 'datetime', TRIM(xtime_new))
+      !$ser init directory='./ser_data' prefix='mpas_dycore'
+      !$ser savepoint atm_srk3 datetime=xtime_new
+      
+      ! savepoint_name='minee'
+      ! CALL ser_init('init')
+      ! call fs_create_savepoint(TRIM(savepoint_name), ppser_savepoint)
+      ! call fs_add_savepoint_metainfo(ppser_savepoint, 'datetime', TRIM(xtime_new))
       if (trim(config_time_integration) == 'SRK3') then
          call atm_srk3(domain, dt, itimestep, exchange_halo_group)
       else
@@ -698,6 +701,13 @@ module atm_time_integration
       tend_rho_physics(:,nCells+1) = 0.0_RKIND
       call mpas_pool_get_array(tend_physics, 'tend_ru_physics', tend_ru_physics)
       tend_ru_physics(:,nEdges+1) = 0.0_RKIND
+
+
+
+      ! !$ser init directory='./ser_data' prefix='mpas_dycore'
+      ! !$ser savepoint atm_srk3 date=date rk_step=rk_step
+      ! !$ser mode write
+      ! !$ser accdata alpha_tri=alpha_tri
 
       !
       ! Initialize RK weights
@@ -1966,10 +1976,10 @@ module atm_time_integration
       !!$acc enter data create(alpha_tri)
       !CALL ser_array('alpha_tri', alpha_tri, 0)
 
-      !$ser init directory='.' prefix='SerialboxTest'
-      !$ser savepoint sp1
-      !$ser mode write
-      !$ser accdata alpha_tri=alpha_tri
+      ! !$ser init directory='.' prefix='SerialboxTest'
+      ! !$ser savepoint sp1
+      ! !$ser mode write
+      ! !$ser accdata alpha_tri=alpha_tri
 ! MGD bad to have all threads setting this variable?
       do k=1,nVertLevels
          cofrz(k) = dtseps*rdzw(k)
@@ -2962,6 +2972,12 @@ module atm_time_integration
             end do
          end do
          !$acc end parallel
+         ! !$ser spinfo rk_step=rk_step
+         !$ser mode write
+         !$ser accdata rtheta_p=rtheta_p
+         !$ser accdata theta_m=theta_m
+         !$ser accdata exner=exner
+         !$ser accdata pressure_p=pressure_p
       else
          !$acc parallel
          !$acc loop collapse(2)
@@ -3293,7 +3309,7 @@ module atm_time_integration
       !$acc enter data copyin(uhAvg, scalar_new)
       MPAS_ACC_TIMER_STOP('atm_advance_scalars [ACC_data_xfer]')
 
-      CALL ser_array('scalar_new', scalar_new, 0)
+      !CALL ser_array('scalar_new', scalar_new, 0)
       !$acc parallel async
       !$acc loop gang worker private(scalar_weight2, ica)
       do iEdge=edgeStart,edgeEnd

@@ -22,7 +22,7 @@ SERLIB = libsimple_m_ser.a
 
 all: $(OBJS) $(SERLIB)
 
-mpas_atm_time_integration.o: mpas_atm_boundaries.o mpas_atm_iau.o
+mpas_atm_time_integration_ser.o: mpas_atm_boundaries.o mpas_atm_iau.o
 
 mpas_atm_boundaries.o:
 
