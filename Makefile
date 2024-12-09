@@ -759,15 +759,18 @@ endif
 	LIBS += $(NCLIB)
 endif
 
-FCINCLUDES += -I/glade/derecho/scratch/agopal/serialbox_2.6.2_2/install/include \
-           -I/glade/derecho/scratch/agopal/serialbox_2.6.2_2/src \
-           -isystem /glade/derecho/scratch/agopal/boost_1_86_0/install/include -DSERIALIZE
+export SERIALBOX_ROOT=/glade/derecho/scratch/agopal/myserialbox
+export BOOST_ROOT=/glade/derecho/scratch/agopal/boost_1_86_0
+
+FCINCLUDES += -I$(SERIALBOX_ROOT)/install/include \
+           -I$(SERIALBOX_ROOT)/src \
+           -isystem $(BOOST_ROOT)/install/include -DSERIALIZE
 
 SERLIB = libsimple_m_ser.a
 
 #LIBS +=  -L/glade/derecho/scratch/agopal/serialbox_2.6.2_2/install/lib -lSerialboxFortran -lSerialboxC -lSerialboxCore -lpthread
-LIBS +=  -Wl,-rpath,libsimple_m_ser.a /glade/derecho/scratch/agopal/serialbox_2.6.2_2/install/lib/libSerialboxFortran.a \
-           /glade/derecho/scratch/agopal/serialbox_2.6.2_2/install/lib/libSerialboxC.a /glade/derecho/scratch/agopal/serialbox_2.6.2_2/install/lib/libSerialboxCore.a
+LIBS +=  -Wl,-rpath,libsimple_m_ser.a $(SERIALBOX_ROOT)/install/lib/libSerialboxFortran.a \
+           $(SERIALBOX_ROOT)/install/lib/libSerialboxC.a $(SERIALBOX_ROOT)/install/lib/libSerialboxCore.a
 
 ifneq "$(PNETCDF)" ""
 ifneq ($(wildcard $(PNETCDF)/lib), )

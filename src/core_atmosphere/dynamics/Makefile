@@ -38,7 +38,7 @@ clean:
 # 	/glade/derecho/scratch/agopal/serialbox_2.6.2_2/install/python/pp_ser/pp_ser.py $< -o $@
 
 %_ser.F: %.F
-	/glade/derecho/scratch/agopal/serialbox_2.6.2_2/install/python/pp_ser/pp_ser.py $< -o $@	
+	$(SERIALBOX_ROOT)/install/python/pp_ser/pp_ser.py $< -o $@	
 
 # Rule to create the static library
 # $(SERLIB): m_ser_o.o

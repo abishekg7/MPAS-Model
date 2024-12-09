@@ -16,6 +16,8 @@
 
 module atm_time_integration
    USE m_ser, ONLY: ser_init, ser_array
+   USE m_ser_mpas_cmp, ONLY: mpas_compare
+   USE m_ser_mpas, ONLY: mpas_set_serializer, mpas_set_savepoint
    USE m_serialize, ONLY: fs_add_savepoint_metainfo, fs_read_field, fs_create_savepoint, fs_write_field
    USE utils_ppser, ONLY: ppser_set_mode, ppser_initialize, ppser_get_mode, ppser_savepoint, &
        ppser_serializer, ppser_serializer_ref, ppser_intlength, ppser_reallength, &
@@ -481,7 +483,7 @@ module atm_time_integration
       call mpas_pool_get_config(block % configs, 'config_apply_lbcs', config_apply_lbcs)
 
       call mpas_get_time(nowTime, dateTimeString=xtime_new)
-      !$ser init directory='./ser_data' prefix='mpas_dycore'
+      !$ser init directory='./ser_data' prefix='mpas_dycore' prefix_ref='mpas_dycore-cpu'
       !$ser savepoint atm_srk3 datetime=xtime_new
       
       ! savepoint_name='minee'
@@ -2890,7 +2892,6 @@ module atm_time_integration
       integer, intent(in) :: cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd
       integer, intent(in) :: cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd
 
-
       !
       ! Local variables
       !
@@ -2972,12 +2973,24 @@ module atm_time_integration
             end do
          end do
          !$acc end parallel
-         ! !$ser spinfo rk_step=rk_step
+         
+         !$ser verbatim call fs_add_savepoint_metainfo(ppser_savepoint, 'rk_step', rk_step)
+         ! $ser mode read
+         ! $ser accdata rtheta_p=rtheta_p
+         ! $ser accdata theta_m=theta_m
+         ! $ser accdata exner=exner
+         ! $ser accdata pressure_p=pressure_p
+         !$ser compare theta_m rtol=1e-8 atol=1e-14
+         !CALL mpas_compare("theta_m", theta_m, cmp_result)
+         !call mpas_compare("theta_m",theta_m, rtol=1e-8, atol=1e-14)
+
          !$ser mode write
          !$ser accdata rtheta_p=rtheta_p
          !$ser accdata theta_m=theta_m
          !$ser accdata exner=exner
          !$ser accdata pressure_p=pressure_p
+         
+        
       else
          !$acc parallel
          !$acc loop collapse(2)
