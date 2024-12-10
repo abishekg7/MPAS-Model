@@ -17,6 +17,7 @@
 module atm_time_integration
    USE m_ser, ONLY: ser_init, ser_array
    USE m_ser_mpas_cmp, ONLY: mpas_compare
+   USE mo_ser_common, ONLY: compare
    USE m_ser_mpas, ONLY: mpas_set_serializer, mpas_set_savepoint
    USE m_serialize, ONLY: fs_add_savepoint_metainfo, fs_read_field, fs_create_savepoint, fs_write_field
    USE utils_ppser, ONLY: ppser_set_mode, ppser_initialize, ppser_get_mode, ppser_savepoint, &
