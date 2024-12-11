@@ -157,7 +157,7 @@ nvhpc:   # BUILDTARGET NVIDIA HPC SDK
 	"LDFLAGS_DEBUG = -O0 -g -Mbounds -Ktrap=divz,fp,inv,ovf -traceback" \
 	"FFLAGS_OMP = -mp" \
 	"CFLAGS_OMP = -mp" \
-	"FFLAGS_ACC = -Mnofma -acc -gpu=cc70,cc80 -Minfo=accel " \
+	"FFLAGS_ACC = -Mnofma -acc -gpu=cc70,cc80 -Minfo=accel" \
 	"CFLAGS_ACC =" \
 	"PICFLAG = -fpic" \
 	"BUILD_TARGET = $(@)" \
@@ -768,7 +768,6 @@ FCINCLUDES += -I$(SERIALBOX_ROOT)/install/include \
 
 SERLIB = libsimple_m_ser.a
 
-#LIBS +=  -L/glade/derecho/scratch/agopal/serialbox_2.6.2_2/install/lib -lSerialboxFortran -lSerialboxC -lSerialboxCore -lpthread
 LIBS +=  -Wl,-rpath,libsimple_m_ser.a $(SERIALBOX_ROOT)/install/lib/libSerialboxFortran.a \
            $(SERIALBOX_ROOT)/install/lib/libSerialboxC.a $(SERIALBOX_ROOT)/install/lib/libSerialboxCore.a
 
@@ -869,9 +868,6 @@ ifeq "$(OPENMP_OFFLOAD)" "true"
 	override CPPFLAGS += "-DMPAS_OPENMP_OFFLOAD"
 	LDFLAGS += $(LDFLAGS_GPU)
 endif #OPENMP_OFFLOAD IF
-
-#FFLAGS += " -DSERIALIZE"
-#FFLAGS += " -I/glade/derecho/scratch/agopal/serialbox_2.6.2_2/install/include "
 
 ifneq (,$(filter-out double single,$(PRECISION)))
 $(error PRECISION should be "", "single", or "double"; received value "$(PRECISION)")

@@ -487,10 +487,6 @@ module atm_time_integration
       !$ser init directory='./ser_data' prefix='mpas_dycore' prefix_ref='mpas_dycore-cpu'
       !$ser savepoint atm_srk3 datetime=xtime_new
       
-      ! savepoint_name='minee'
-      ! CALL ser_init('init')
-      ! call fs_create_savepoint(TRIM(savepoint_name), ppser_savepoint)
-      ! call fs_add_savepoint_metainfo(ppser_savepoint, 'datetime', TRIM(xtime_new))
       if (trim(config_time_integration) == 'SRK3') then
          call atm_srk3(domain, dt, itimestep, exchange_halo_group)
       else
@@ -704,13 +700,6 @@ module atm_time_integration
       tend_rho_physics(:,nCells+1) = 0.0_RKIND
       call mpas_pool_get_array(tend_physics, 'tend_ru_physics', tend_ru_physics)
       tend_ru_physics(:,nEdges+1) = 0.0_RKIND
-
-
-
-      ! !$ser init directory='./ser_data' prefix='mpas_dycore'
-      ! !$ser savepoint atm_srk3 date=date rk_step=rk_step
-      ! !$ser mode write
-      ! !$ser accdata alpha_tri=alpha_tri
 
       !
       ! Initialize RK weights
@@ -1954,35 +1943,6 @@ module atm_time_integration
 
       av = 5.0
 
-      !CALL myserialize(av)
-      ! CALL ser_init('minee')
-      ! call fs_create_savepoint(TRIM(savepoint_name), ppser_savepoint)
-      ! call fs_add_savepoint_metainfo(ppser_savepoint, 'date', TRIM(date))
-
-
-      ! setup serialization environment
-      ! call ppser_initialize(directory='.',prefix='SerialboxTest')
-      ! call fs_create_savepoint('sp1', ppser_savepoint)
-      ! call ppser_set_mode(0)
-  
-      ! SELECT CASE ( ppser_get_mode() )
-      !   CASE(0)
-      !     call fs_write_field(ppser_serializer, ppser_savepoint, 'ser_a', qtotal)
-      !   CASE(1)
-      !     call fs_read_field(ppser_serializer_ref, ppser_savepoint, 'ser_a', qtotal)
-      !   CASE(2)
-      !     call fs_read_field(ppser_serializer_ref, ppser_savepoint, 'ser_a', qtotal, &
-      !                                                            ppser_zrperturb)
-      ! END SELECT
-
-      !CALL ser_array_d_3d('vara', scalars, 0)
-      !!$acc enter data create(alpha_tri)
-      !CALL ser_array('alpha_tri', alpha_tri, 0)
-
-      ! !$ser init directory='.' prefix='SerialboxTest'
-      ! !$ser savepoint sp1
-      ! !$ser mode write
-      ! !$ser accdata alpha_tri=alpha_tri
 ! MGD bad to have all threads setting this variable?
       do k=1,nVertLevels
          cofrz(k) = dtseps*rdzw(k)
@@ -2044,9 +2004,6 @@ module atm_time_integration
          end do
 
       end do ! loop over cells
-      !!$acc update device(alpha_tri)
-      !CALL ser_array('alpha_tri', alpha_tri, 0)
-      !!$acc exit data delete(alpha_tri)
 
    end subroutine atm_compute_vert_imp_coefs_work
 
@@ -2974,22 +2931,25 @@ module atm_time_integration
             end do
          end do
          !$acc end parallel
-         
-         !$ser verbatim call fs_add_savepoint_metainfo(ppser_savepoint, 'rk_step', rk_step)
-         ! $ser mode read
-         ! $ser accdata rtheta_p=rtheta_p
-         ! $ser accdata theta_m=theta_m
-         ! $ser accdata exner=exner
-         ! $ser accdata pressure_p=pressure_p
-         !$ser compare theta_m rtol=1e-8 atol=1e-14
-         !CALL mpas_compare("theta_m", theta_m, cmp_result)
-         !call mpas_compare("theta_m",theta_m, rtol=1e-8, atol=1e-14)
 
+         !$ser verbatim call fs_add_savepoint_metainfo(ppser_savepoint, 'rk_step', rk_step)
          !$ser mode write
          !$ser accdata rtheta_p=rtheta_p
-         !$ser accdata theta_m=theta_m
-         !$ser accdata exner=exner
-         !$ser accdata pressure_p=pressure_p
+
+
+         !!$ser verbatim call fs_add_savepoint_metainfo(ppser_savepoint, 'rk_step', rk_step)
+         !!$ser mode read
+         !!$ser accdata rtheta_p=rtheta_p
+         !!$ser accdata theta_m=theta_m
+         !!$ser accdata exner=exner
+         !!$ser accdata pressure_p=pressure_p
+         !!!$ser compare theta_m rtol=1e-8 atol=1e-14
+
+         !!$ser mode write
+         !!$ser accdata rtheta_p=rtheta_p
+         !!$ser accdata theta_m=theta_m
+         !!$ser accdata exner=exner
+         !!$ser accdata pressure_p=pressure_p
          
         
       else
