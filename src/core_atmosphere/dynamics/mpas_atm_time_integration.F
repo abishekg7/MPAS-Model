@@ -104,6 +104,7 @@ module atm_time_integration
    type (block_type), pointer, private :: block
 
 
+
    ! Used for Rayleigh damping on u
    ! NB: We do not necessarily want this to vary with calendar, as it is used to set
    ! a timescale in seconds given a timescale in days, and it could be rather confusing
@@ -431,7 +432,6 @@ module atm_time_integration
 
       call mpas_get_time(nowTime, dateTimeString=xtime_new)
       !$ser init directory='./ser_data' prefix='mpas_dycore' prefix_ref='mpas_dycore-cpu'
-      !$ser savepoint atm_srk3 datetime=xtime_new
       
       if (trim(config_time_integration) == 'SRK3') then
          call atm_srk3(domain, dt, itimestep, exchange_halo_group)
@@ -823,7 +823,7 @@ module atm_time_integration
 
 !$OMP PARALLEL DO
             do thread=1,nThreads
-               call atm_compute_dyn_tend( tend, tend_physics, state, diag, mesh, block % configs, nVertLevels, rk_step, dt, & 
+               call atm_compute_dyn_tend( tend, tend_physics, state, diag, mesh, block % configs, nVertLevels, rk_step, dynamics_substep, dt, & 
                                           cellThreadStart(thread), cellThreadEnd(thread), &
                                           vertexThreadStart(thread), vertexThreadEnd(thread), &
                                           edgeThreadStart(thread), edgeThreadEnd(thread), &
@@ -936,7 +936,7 @@ module atm_time_integration
 !$OMP PARALLEL DO
                do thread=1,nThreads
                   call atm_advance_acoustic_step( state, diag, tend,  mesh, block % configs, nCells, nVertLevels, &
-                                          rk_sub_timestep(rk_step), small_step, &
+                                          rk_sub_timestep(rk_step), small_step, rk_step, dynamics_substep, &
                                           cellThreadStart(thread), cellThreadEnd(thread), &
                                           vertexThreadStart(thread), vertexThreadEnd(thread), &
                                           edgeThreadStart(thread), edgeThreadEnd(thread), &
@@ -1646,6 +1646,9 @@ module atm_time_integration
       real (kind=RKIND), dimension(:,:), pointer :: rho_zz_1, rho_zz_2
       real (kind=RKIND), dimension(:,:,:), pointer :: scalars_1, scalars_2
 
+      character (len=StrKIND), pointer :: xtime
+
+
       call mpas_pool_get_array(diag, 'ru', ru)
       call mpas_pool_get_array(diag, 'ru_save', ru_save)
       call mpas_pool_get_array(diag, 'rw', rw)
@@ -1666,6 +1669,8 @@ module atm_time_integration
       call mpas_pool_get_array(state, 'rho_zz', rho_zz_2, 2)
       call mpas_pool_get_array(state, 'scalars', scalars_1, 1)
       call mpas_pool_get_array(state, 'scalars', scalars_2, 2)
+      call mpas_pool_get_array(state, 'xtime', xtime, 2)
+
 
       MPAS_ACC_TIMER_START('atm_rk_integration_setup [ACC_data_xfer]')
       !$acc enter data create(ru_save, u_2, rw_save, rtheta_p_save, rho_p_save, &
@@ -1674,6 +1679,7 @@ module atm_time_integration
       !$acc                   rho_zz_1, scalars_1)
       MPAS_ACC_TIMER_STOP('atm_rk_integration_setup [ACC_data_xfer]')
 
+      !$ser savepoint setup datetime=xtime
       !$ser mode write
       !$ser accdata ru=ru
       !$ser accdata u_1=u_1
@@ -1740,6 +1746,11 @@ module atm_time_integration
       ! rho_zz_old_split(:,cellStart:cellEnd) =  rho_zz_1(:,cellStart:cellEnd)
       ! scalars_2(:,:,cellStart:cellEnd) = scalars_1(:,:,cellStart:cellEnd)
       
+      !rtheta_p_save(:,cellStart:cellEnd) = rtheta_p(:,cellStart:cellEnd)
+      !theta_m_2(:,cellStart:cellEnd) = theta_m_1(:,cellStart:cellEnd)
+      !!$acc update device(rtheta_p_save, theta_m_2)
+      !rho_zz_2(:,cellStart:cellEnd) = rho_zz_1(:,cellStart:cellEnd)
+      !!$acc update device(rtheta_p_save, theta_m_2, rho_zz_2)
 
 
       !$ser accdata ru_save=ru_save
@@ -2218,7 +2229,7 @@ module atm_time_integration
 
 
    subroutine atm_advance_acoustic_step( state, diag, tend, mesh, configs, nCells, nVertLevels, dts, small_step, &
-                                   cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
+                                    rk_step, dynamics_substep, cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
                                    cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd)
 
       !  This subroutine performs the entire acoustic step update, following Klemp et al MWR 2007,
@@ -2234,7 +2245,7 @@ module atm_time_integration
       type (mpas_pool_type), intent(inout) :: tend
       type (mpas_pool_type), intent(inout) :: mesh
       type (mpas_pool_type), intent(in)    :: configs
-      integer, intent(in) :: small_step              ! acoustic step number
+      integer, intent(in) :: small_step, rk_step, dynamics_substep              ! acoustic step number
       integer, intent(in) :: nCells                  ! for allocating stack variables
       integer, intent(in) :: nVertLevels             ! for allocating stack variables
       real (kind=RKIND), intent(in) :: dts
@@ -2271,6 +2282,10 @@ module atm_time_integration
       real (kind=RKIND), pointer :: cf1, cf2, cf3
 
       integer, pointer :: nEdges, nCellsSolve
+
+      character (len=StrKIND), pointer :: xtime
+
+      call mpas_pool_get_array(state, 'xtime', xtime, 2)
 
       call mpas_pool_get_array(mesh, 'cellsOnEdge', cellsOnEdge)
       call mpas_pool_get_array(mesh, 'edgesOnCell', edgesOnCell)
@@ -2345,7 +2360,7 @@ module atm_time_integration
                                    rho_pp, cofwt, coftz, zxu, a_tri, alpha_tri, gamma_tri, dss, tend_ru, tend_rho, tend_rt, &
                                    tend_rw, zgrid, cofwr, cofwz, w, ru, ru_save, rw, rw_save, fzm, fzp, rdzw, dcEdge, invDcEdge, &
                                    invAreaCell, cofrz, dvEdge, nEdgesOnCell, cellsOnEdge, edgesOnCell, edgesOnCell_sign, &
-                                   dts, small_step, epssm, cf1, cf2, cf3, &
+                                   dts, small_step, rk_step, dynamics_substep, xtime, epssm, cf1, cf2, cf3, &
                                    specZoneMaskEdge, specZoneMaskCell &
                                    )
 
@@ -2358,7 +2373,7 @@ module atm_time_integration
                                    rho_pp, cofwt, coftz, zxu, a_tri, alpha_tri, gamma_tri, dss, tend_ru, tend_rho, tend_rt, &
                                    tend_rw, zgrid, cofwr, cofwz, w, ru, ru_save, rw, rw_save, fzm, fzp, rdzw, dcEdge, invDcEdge, &
                                    invAreaCell, cofrz, dvEdge, nEdgesOnCell, cellsOnEdge, edgesOnCell, edgesOnCell_sign, &
-                                   dts, small_step, epssm, cf1, cf2, cf3, &
+                                   dts, small_step, rk_step, dynamics_substep, xtime, epssm, cf1, cf2, cf3, &
                                    specZoneMaskEdge, specZoneMaskCell &
                                    )
 
@@ -2426,10 +2441,12 @@ module atm_time_integration
       real (kind=RKIND), dimension(nCells+1) :: specZoneMaskCell
       real (kind=RKIND), dimension(nEdges+1) :: specZoneMaskEdge
       
+      character (len=StrKIND), intent(in) :: xtime
 
-      integer, intent(in) :: small_step
+      integer, intent(in) :: small_step, rk_step, dynamics_substep
       real (kind=RKIND), intent(in) :: dts, epssm,cf1, cf2, cf3
       real (kind=RKIND), dimension(nVertLevels) :: ts, rs
+
 
   
       !
@@ -2438,6 +2455,7 @@ module atm_time_integration
       integer :: cell1, cell2, iEdge, iCell, i, k
       real (kind=RKIND) :: c2, rcv, rtheta_pp_tmp
       real (kind=RKIND) :: pgrad, flux, resm, rdts
+
 
 
       rcv = rgas / (cp - rgas)
@@ -2519,6 +2537,8 @@ module atm_time_integration
       end if
 
 !$OMP BARRIER
+      !$ser savepoint aco_step datetime=xtime small_step=small_step rk_step=rk_step dyn_substep=dynamics_substep
+      !$ser data theta_m_aco_step_1=theta_m
 
       do iCell=cellSolveStart,cellSolveEnd  ! loop over all owned cells to solve
 
@@ -2627,6 +2647,9 @@ module atm_time_integration
          end if
 
       end do !  end of loop over cells
+
+      !$ser data theta_m_aco_step_2=theta_m
+
 
    end subroutine atm_advance_acoustic_step_work
 
@@ -2938,6 +2961,8 @@ module atm_time_integration
             end do
          else
          !!$ser verbatim call fs_add_savepoint_metainfo(ppser_savepoint, 'rk_step', rk_step)
+         !!$ser savepoint atm_srk3 datetime=xtime_new
+
          !!$ser mode write
          !!$ser accdata rtheta_p=rtheta_p
 
@@ -4339,7 +4364,7 @@ module atm_time_integration
    end subroutine atm_advance_scalars_mono_work
 
 
-   subroutine atm_compute_dyn_tend(tend, tend_physics, state, diag, mesh, configs, nVertLevels, rk_step, dt, &
+   subroutine atm_compute_dyn_tend(tend, tend_physics, state, diag, mesh, configs, nVertLevels, rk_step, dynamics_substep, dt, &
                                    cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
                                    cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd)
    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
@@ -4367,7 +4392,7 @@ module atm_time_integration
       type (mpas_pool_type), intent(in) :: mesh
       type (mpas_pool_type), intent(in) :: configs
       integer, intent(in) :: nVertLevels              ! for allocating stack variables
-      integer, intent(in) :: rk_step
+      integer, intent(in) :: rk_step, dynamics_substep
       real (kind=RKIND), intent(in) :: dt
       integer, intent(in) :: cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd
       integer, intent(in) :: cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd
@@ -4433,7 +4458,9 @@ module atm_time_integration
       logical, pointer :: config_rayleigh_damp_u
       real (kind=RKIND), pointer :: config_rayleigh_damp_u_timescale_days
       integer, pointer :: config_number_rayleigh_damp_u_levels, config_number_cam_damping_levels
+      character (len=StrKIND), pointer :: xtime
 
+      call mpas_pool_get_array(state, 'xtime', xtime, 2)
 
       call mpas_pool_get_config(mesh, 'sphere_radius', r_earth)
       call mpas_pool_get_config(configs, 'config_coef_3rd_order', coef_3rd_order)
@@ -4573,7 +4600,7 @@ module atm_time_integration
          rdzu, rdzw, fzm, fzp, qv_init, t_init, cf1, cf2, cf3, r_earth, ur_cell, vr_cell, defc_a, defc_b, &
          tend_w_pgf, tend_w_buoy, coef_3rd_order, c_s, config_mix_full, config_horiz_mixing, config_del4u_div_factor, &
          config_h_mom_eddy_visc2, config_v_mom_eddy_visc2, config_h_theta_eddy_visc2, config_v_theta_eddy_visc2, &
-         config_h_theta_eddy_visc4, config_h_mom_eddy_visc4, config_visc4_2dsmag, config_len_disp, rk_step, dt, &
+         config_h_theta_eddy_visc4, config_h_mom_eddy_visc4, config_visc4_2dsmag, config_len_disp, rk_step, dynamics_substep, xtime, dt, &
          config_mpas_cam_coef, &
          config_rayleigh_damp_u, config_rayleigh_damp_u_timescale_days, & 
          config_number_rayleigh_damp_u_levels, config_number_cam_damping_levels, &
@@ -4597,7 +4624,7 @@ module atm_time_integration
       rdzu, rdzw, fzm, fzp, qv_init, t_init, cf1, cf2, cf3, r_earth, ur_cell, vr_cell, defc_a, defc_b, &
       tend_w_pgf, tend_w_buoy, coef_3rd_order, c_s, config_mix_full, config_horiz_mixing, config_del4u_div_factor, &
       config_h_mom_eddy_visc2, config_v_mom_eddy_visc2, config_h_theta_eddy_visc2, config_v_theta_eddy_visc2, &
-      config_h_theta_eddy_visc4, config_h_mom_eddy_visc4, config_visc4_2dsmag, config_len_disp, rk_step, dt, &
+      config_h_theta_eddy_visc4, config_h_mom_eddy_visc4, config_visc4_2dsmag, config_len_disp, rk_step, dynamics_substep, xtime, dt, &
       config_mpas_cam_coef, &
       config_rayleigh_damp_u, config_rayleigh_damp_u_timescale_days, &
       config_number_rayleigh_damp_u_levels, config_number_cam_damping_levels, &
@@ -4681,6 +4708,8 @@ module atm_time_integration
       real (kind=RKIND), dimension(nEdges+1) :: latEdge
       real (kind=RKIND), dimension(nEdges+1) :: angleEdge
       real (kind=RKIND), dimension(nVertLevels) :: u_init, v_init
+      character (len=StrKIND), intent(in) :: xtime
+
 
       integer, dimension(15,nEdges+1) :: advCellsForEdge
       integer, dimension(nEdges+1) :: nAdvCellsForEdge
@@ -4717,7 +4746,7 @@ module atm_time_integration
       real (kind=RKIND) :: config_len_disp
       real (kind=RKIND) :: config_h_mom_eddy_visc2, config_v_mom_eddy_visc2, config_h_theta_eddy_visc2, config_v_theta_eddy_visc2
 
-      integer, intent(in) :: rk_step
+      integer, intent(in) :: rk_step, dynamics_substep
       real (kind=RKIND), intent(in) :: dt
 
       real (kind=RKIND) :: config_mpas_cam_coef
@@ -4757,6 +4786,9 @@ module atm_time_integration
 
       real (kind=RKIND) :: flux3, flux4
       real (kind=RKIND) :: q_im2, q_im1, q_i, q_ip1, ua, coef3
+
+      character (len=StrKIND), pointer :: xtime
+
 
       flux4(q_im2, q_im1, q_i, q_ip1, ua) =                     &
                 ua*( 7.*(q_i + q_im1) - (q_ip1 + q_im2) )/12.0
@@ -5330,7 +5362,8 @@ module atm_time_integration
       end do
 
 !----------- rhs for theta
-
+      !$ser savepoint dyn_tend datetime=xtime rk_step=rk_step dyn_substep=dynamics_substep
+      !$ser data theta_m_dyn_tend_1=theta_m
       !
       !  horizontal advection for theta
       !
@@ -5357,6 +5390,8 @@ module atm_time_integration
 
          end do
       end do
+
+      !$ser data theta_m_dyn_tend_2=theta_m
 
 !  addition to pick up perturbation flux for rtheta_pp equation
 
@@ -6131,6 +6166,8 @@ module atm_time_integration
       real (kind=RKIND), dimension(:,:), pointer :: rho_zz_1, rho_zz_2, rho_zz_old_split
       real (kind=RKIND), dimension(:,:), pointer :: ruAvg, wwAvg, ruAvg_split, wwAvg_split
 
+      character (len=StrKIND), pointer :: xtime
+
       call mpas_pool_get_array(diag, 'ru', ru)
       call mpas_pool_get_array(diag, 'ru_save', ru_save)
       call mpas_pool_get_array(diag, 'rw', rw)
@@ -6153,9 +6190,17 @@ module atm_time_integration
       call mpas_pool_get_array(state, 'theta_m', theta_m_2, 2)
       call mpas_pool_get_array(state, 'rho_zz', rho_zz_1, 1)
       call mpas_pool_get_array(state, 'rho_zz', rho_zz_2, 2)
+      call mpas_pool_get_array(state, 'xtime', xtime, 2)
 
       inv_dynamics_split = 1.0_RKIND / real(dynamics_split)
+
       
+      !$ser savepoint finish datetime=xtime dyn_substep=dynamics_substep
+      !$ser data theta_m_2_fin_1=theta_m_2
+      !$ser data rho_zz_2_fin_1=rho_zz_2
+      !$ser data rho_p_save_fin_1=rho_p_save
+      !$ser data rtheta_p_save_fin_1=rtheta_p_save
+
       if (dynamics_substep < dynamics_split) then
 
          ru_save(:,edgeStart:edgeEnd) = ru(:,edgeStart:edgeEnd)
@@ -6169,6 +6214,12 @@ module atm_time_integration
          rho_zz_1(:,cellStart:cellEnd) = rho_zz_2(:,cellStart:cellEnd)
 
       end if
+
+      !$ser data theta_m_2_fin_2=theta_m_2
+      !$ser data rho_zz_2_fin_2=rho_zz_2
+      !$ser data rho_p_save_fin_2=rho_p_save
+      !$ser data rtheta_p_save_fin_2=rtheta_p_save
+
 
       if (dynamics_substep == 1) then
          ruAvg_split(:,edgeStart:edgeEnd) = ruAvg(:,edgeStart:edgeEnd)
