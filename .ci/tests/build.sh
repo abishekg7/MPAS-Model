@@ -34,7 +34,7 @@ cd $workingDirectory
 # Get some helper functions, AS_HOST must be set by this point to work
 . .ci/env/helpers.sh
 
-while getopts b:c:t:de:h opt; do
+while getopts b:c:t:dge:h opt; do
   case $opt in
     b)
       buildCommand="$OPTARG"
@@ -50,6 +50,9 @@ while getopts b:c:t:de:h opt; do
     ;;
     e)
       envVars="$envVars,$OPTARG"
+    ;;
+    g)
+      openacc="OPENACC=true"
     ;;
     h)  help; exit 0 ;;
     *)  help; exit 1 ;;
@@ -79,7 +82,7 @@ make clean CORE=$core
 
 echo "Compiling with options $target core=$core $debug $buildCommand"
 echo "make $target CORE=$core $debug $buildCommand"
-make $target CORE=$core $debug $buildCommand
+make $target CORE=$core $openacc $debug $buildCommand
 result=$?
 
 if [ $result -ne 0 ]; then
