@@ -35,6 +35,9 @@ restart_timestamp
 *.err
 *.abort
 
+# log files under .ci
+.ci/*.log
+
 # Text files (For statistical output from ocean model)
 *.txt
 !CMakeLists.txt
