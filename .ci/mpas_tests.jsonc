@@ -1,0 +1,214 @@
+// MPAS Compilation tests
+{
+  "submit_options" :
+  {
+    // Default values
+    "timelimit" : "00:15:00",
+    "working_directory" : "..",
+    "arguments" :
+    {
+      "base_env_numprocs"      : [ "-e", "NUM_PROCS=4" ],
+
+      ".*make.*::args_build_core"     : [ "-c", "atmosphere" ],
+      ".*debug.*::args_build_debug"     : [ "-d" ],
+      ".*make.*::args_build_options"     : [ "-b", "-j $NUM_PROCS" ],
+      ".*make.*gnu.*::args_target"     : [ "-t", "gnu" ],
+      ".*make.*nvhpc.*::args_target"     : [ "-t", "nvhpc" ]
+      //".*make.*nvhpc.*::args_openacc"     : [ "-g" ]
+    },
+    // Derecho-specifics
+    "hsn.de.hpc"  :
+    {
+      "submission" : "PBS",
+      "queue"      : "develop",
+      "-m" : "n",
+      "hpc_arguments"  : 
+      {
+        ".*testcase.*base.*::node_select" : 
+          { 
+            "-l " : { "select"       : 1, "ncpus" : 1  }
+          },
+        ".*testcase-serial.*::node_select" :
+        {
+           "-l " : { "select"       : 1, "ncpus" : 16, "mpiprocs" : 4 } 
+        },
+        ".*testcase-serial.*::node_select" :
+        {
+           "-l " : { "select": 1, "ncpus": 16, "mpiprocs":1, "ngpus":1 } 
+        },
+        "priority"    : { "-l " : { "job_priority" : "economy"       } },
+        "mail_events" : { "-m " : { "n" : ""}}
+      },
+      "arguments"  : 
+      {
+        // We want NUM_PROCS to match ncpus
+        //"base_env_numprocs"      : [ "-e", "NUM_PROCS=16, LD_LIBRARY_PATH=/glade/u/apps/derecho/23.09/spack/opt/spack/parallel-netcdf/1.12.3/cray-mpich/8.1.27/gcc/12.2.0/sq5u/lib:/glade/u/apps/derecho/23.09/spack/opt/spack/netcdf/4.9.2/gcc/12.2.0/gjc6/lib:\\\\$LD_LIBRARY_PATH" ],
+        "base_env_numprocs"      : [ "-e", "NUM_PROCS=16" ],
+        "global_modules" : [ "ncarenv/23.09"],
+        //"very_last_modules"       : [  "cray-mpich", "parallel-netcdf" ],
+        ".*gnu.*::test_modules"   : [ "gcc/12.2.0","cray-mpich", "parallel-netcdf", "netcdf" ],
+        ".*nvhpc.*::test_modules"   : [ "nvhpc/24.3","cray-mpich", "parallel-netcdf", "cuda" ],
+        ".*testcase.*base.*::args_namelist" :
+          [ 
+            "-g", "base",
+            "-b", "atmosphere_model",
+            "-f", "/glade/derecho/scratch/agopal/jw_input/",
+            "-q", "01:00:00",
+            "-w", "02:00:00",
+            "-e", "LD_LIBRARY_PATH=/glade/u/apps/derecho/23.09/spack/opt/spack/parallel-netcdf/1.12.3/cray-mpich/8.1.27/gcc/12.2.0/sq5u/lib:/glade/u/apps/derecho/23.09/spack/opt/spack/netcdf/4.9.2/gcc/12.2.0/gjc6/lib:\\\\$LD_LIBRARY_PATH"
+          ],
+          ".*testcase.*restart.*::args_namelist" :
+          [ 
+            "-g", "restart",
+            "-b", "atmosphere_model",
+            "-f", "/glade/derecho/scratch/agopal/jw_input/",
+            "-y", "0000-01-01_01:00:00",
+            "-z", "01:00:00",
+            "-q", "01:00:00",
+            "-w", "02:00:00",
+            "-e", "LD_LIBRARY_PATH=/glade/u/apps/derecho/23.09/spack/opt/spack/parallel-netcdf/1.12.3/cray-mpich/8.1.27/gcc/12.2.0/sq5u/lib:/glade/u/apps/derecho/23.09/spack/opt/spack/netcdf/4.9.2/gcc/12.2.0/gjc6/lib:\\\\$LD_LIBRARY_PATH"
+          ]
+      }
+    }
+  },
+
+  "gnu" :
+    {
+      "submit_options" :
+      {
+        "arguments" :
+        {
+          // Remove auto-filled dir and supply sub-testcase specific ones
+          ".*testcase.*::args_namelist_dir" : [ ]
+        }
+      },
+      "steps" :
+      {
+        "make-release" :
+        {
+          "command"      : ".ci/tests/build.sh"
+        },
+        "testcase-jw-base" :
+        {
+          "submit_options" : { "timelimit" : "00:15:00" },
+          "command"      : ".ci/tests/runTestCases.sh",
+          "arguments" : ["-d", "cpu", "-t", "gnu", "-c", "jw"],
+          "dependencies" : { "make-release" : "afterok" }
+        },
+        "testcase-jw-restart" :
+        {
+          "submit_options" : { "timelimit" : "00:15:00" },
+          "command"      : ".ci/tests/runTestCases.sh",
+          "arguments" : ["-d", "cpu", "-t", "gnu", "-c", "jw"],
+          "dependencies" : { "testcase-jw-base" : "afterok" }
+        }
+      }
+    },
+    "nvhpc" :
+    {
+      "submit_options" :
+      {
+        "arguments" :
+        {
+          // Remove auto-filled dir and supply sub-testcase specific ones
+          ".*testcase.*::args_namelist_dir" : [ ]
+        }
+      },
+      "steps" :
+      {
+        //"make-nvhpc-release-cpu" :
+        //{
+        //  "command"      : ".ci/tests/build.sh"
+        //  //"dependencies" : { "testcase-gnu-restart" : "afterok" }
+        //},
+        "testcase-nvhpc-base-cpu" :
+        {
+          "submit_options" : { "timelimit" : "00:15:00" },
+          "command"      : ".ci/tests/runTestCases.sh",
+          "arguments" : ["-d", "cpu", "-t", "nvhpc", "-c", "jw"]
+          //"dependencies" : { "make-nvhpc-release-cpu" : "afterok" }
+        },
+        "testcase-nvhpc-restart-cpu" :
+        {
+          "submit_options" : { "timelimit" : "00:15:00" },
+          "command"      : ".ci/tests/runTestCases.sh",
+          "arguments" : ["-d", "cpu", "-t", "nvhpc", "-c", "jw"],
+          "dependencies" : { "testcase-nvhpc-base-cpu" : "afterok" }
+        }
+
+      }
+    }
+  }
+  // "jw-baroclinic" :
+  //   {
+  //     "submit_options" :
+  //     {
+  //       "arguments" :
+  //       {
+  //         // Remove auto-filled dir and supply sub-testcase specific ones
+  //         ".*testcase.*::args_namelist_dir" : [ ],
+  //         ".*testcase.*base.*::args_namelist" :
+  //         [ 
+  //           "-c", "base",
+  //           "-b", "atmosphere_model",
+  //           "-f", "/glade/derecho/scratch/agopal/jw_input/",
+  //           "-q", "01:00:00",
+  //           "-w", "02:00:00",
+  //           "-e", "LD_LIBRARY_PATH=/glade/u/apps/derecho/23.09/spack/opt/spack/parallel-netcdf/1.12.3/cray-mpich/8.1.27/gcc/12.2.0/sq5u/lib:/glade/u/apps/derecho/23.09/spack/opt/spack/netcdf/4.9.2/gcc/12.2.0/gjc6/lib:\\\\$LD_LIBRARY_PATH"
+  //         ],
+  //         ".*testcase.*restart.*::args_namelist" :
+  //         [ 
+  //           "-c", "restart",
+  //           "-b", "atmosphere_model",
+  //           "-f", "/glade/derecho/scratch/agopal/jw_input/",
+  //           "-y", "0000-01-01_01:00:00",
+  //           "-z", "01:00:00",
+  //           "-q", "01:00:00",
+  //           "-w", "02:00:00",
+  //           "-e", "LD_LIBRARY_PATH=/glade/u/apps/derecho/23.09/spack/opt/spack/parallel-netcdf/1.12.3/cray-mpich/8.1.27/gcc/12.2.0/sq5u/lib:/glade/u/apps/derecho/23.09/spack/opt/spack/netcdf/4.9.2/gcc/12.2.0/gjc6/lib:\\\\$LD_LIBRARY_PATH"
+  //         ]
+          
+  //       }
+  //     },
+  //     "steps" :
+  //     {
+  //       // "make-nvhpc-release-cpu" :
+  //       // {
+  //       //   "command"      : ".ci/tests/build.sh"
+  //       //   //"dependencies" : { "testcase-gnu-restart" : "afterok" }
+  //       // },
+  //       "testcase-nvhpc-base-cpu" :
+  //       {
+  //         "submit_options" : { "timelimit" : "00:15:00" },
+  //         "command"      : ".ci/tests/runTestCases.sh",
+  //         "arguments" : ["-d", "cpu", "-t", "nvhpc"]
+  //         //"dependencies" : { "make-nvhpc-release-cpu" : "afterok" }
+  //       },
+  //       "testcase-nvhpc-restart-cpu" :
+  //       {
+  //         "submit_options" : { "timelimit" : "00:15:00" },
+  //         "command"      : ".ci/tests/runTestCases.sh",
+  //         "arguments" : ["-d", "cpu", "-t", "nvhpc"],
+  //         "dependencies" : { "testcase-nvhpc-base-cpu" : "afterok" }
+  //       },
+  //       "make-gnu-release" :
+  //       {
+  //         "command"      : ".ci/tests/build.sh",
+  //         "dependencies" : { "testcase-nvhpc-restart-cpu" : "afterok" }
+  //       },
+  //       "testcase-gnu-base" :
+  //       {
+  //         "submit_options" : { "timelimit" : "00:15:00" },
+  //         "command"      : ".ci/tests/runTestCases.sh",
+  //         "arguments" : ["-d", "cpu", "-t", "gnu"],
+  //         "dependencies" : { "make-gnu-release" : "afterok" }
+  //       },
+  //       "testcase-gnu-restart" :
+  //       {
+  //         "submit_options" : { "timelimit" : "00:15:00" },
+  //         "command"      : ".ci/tests/runTestCases.sh",
+  //         "arguments" : ["-d", "cpu", "-t", "gnu"],
+  //         "dependencies" : { "testcase-gnu-base" : "afterok" }
+  //       }
+  //     }
+  //   }
