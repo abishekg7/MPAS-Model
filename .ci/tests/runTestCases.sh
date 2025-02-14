@@ -1,24 +1,29 @@
 #!/bin/sh
+
 help()
 {
-  echo "./runTestCases.sh as_host working_dir test_type [options] [-- <hostenv.sh options>]"
+  echo "./runTestCases.sh as_host working_dir [options] [-- <hostenv.sh options>]"
   echo "  as_host                   First argument must be the host configuration to use for environment loading"
   echo "  working_dir               Second argument must be the working dir to immediate cd to"
-  echo "  test_type                 Third argument must be the working dir to immediate cd to"
   echo "  -c <folder>               Directory for specific core built"
+  echo "  -g <type>                 Type of test to run"
   echo "  -r <folder>               Directory to run in using mkdir and symlinking -c <folder> for each namelist"
   echo "  -b <exec>                 Binary executable for MPAS"
   echo "  -f <folder>               Directory to look for input files in"
-  echo "  -d <folder>               Data directory to link into run directory"
-  echo "  -ri <time>               Restart interval"
-  echo "  -oi <time>               Output interval"
+  echo "  -n <namelists>            Namelists to use"
+  echo "  -d <device>               Device to use"
+  echo "  -q <interval>             Restart interval"
+  echo "  -y <time>                 Restart time"
+  echo "  -z <duration>             Run duration"
+  echo "  -w <interval>             Output interval"
   echo "  -p <mpirun cmd>           Parallel launch command (MPI), e.g. mpirun, mpiexec_mpt, mpiexec -np 8 --oversubscribe"
-
-  echo "  -s <folder>               Save result data to prefix location, full path for run constructed as <work>/<thisfolder>/<namelist>/ "
-  echo "  -i <folder>               Folder for bitwise-identical results, full path for run constructed as <work>/<thisfolder>/<namelist>/ "
-  echo "  -e <varA=val,varB,...>    environment variables in comma-delimited list, e.g. var=1,foo,bar=0"
+  echo "  -t <target>               Target for the test"
+  echo "  -k <diff exec>            Diff executable"
+  echo "  -s <folder>               Save result data to prefix location, full path for run constructed as <work>/<thisfolder>/<namelist>/"
+  echo "  -i <folder>               Folder for bitwise-identical results, full path for run constructed as <work>/<thisfolder>/<namelist>/"
+  echo "  -e <varA=val,varB,...>    Environment variables in comma-delimited list, e.g. var=1,foo,bar=0"
   echo "  -- <hostenv.sh options>   Directly pass options to hostenv.sh, equivalent to hostenv.sh <options>"
-  echo "  -h                  Print this message"
+  echo "  -h                        Print this message"
   echo ""
   echo "If you wish to use an env var in your arg such as '-c \$SERIAL -e SERIAL=32', you must"
   echo "you will need to do '-c \\\$SERIAL -e SERIAL=32' to delay shell expansion when input from shell/CLI"
@@ -39,6 +44,18 @@ nml_replace(){
     fi
 }
 
+nml_replace_quotes(){
+    PARAM=$1
+    VALUE="'$2'"
+    FILE=$3
+    if grep -q '^[[:space:]]*'${PARAM}'[[:space:]]*=' ${FILE}; then
+        sed 's/\(^\s*'$PARAM'\s*=\s*\).*$/\1'${VALUE}'/' < ${FILE} > ${FILE}.out
+        mv ${FILE}.out ${FILE}
+    else
+        echo "$0:${FUNCNAME}: ERROR parameter ${PARAM} not found in ${FILE}"
+        exit 1
+    fi
+}
 
 stream_replace(){
     FILETYPE=$1
@@ -74,13 +91,16 @@ function diff_output
       STATUS=$?
       if [ $STATUS == 0 ]; then
             banner 42 "The experiments are bit-identical"
+            exit 0
       else
             banner 42 "The experiments are NOT bit-identical"
+            exit 1
       fi
 		else
 		    echo "File(s) for $TYPE not found:"
 		    if ! [ -f  "$FILE_TEST" ]; then echo "FILE_TEST does not exist: $FILE_TEST"; fi
 		    if ! [ -f  "$FILE_REF" ]; then echo "FILE_REF does not exist: $FILE_REF"; fi
+        exit 1
 		fi
 }
 
@@ -178,7 +198,7 @@ fi
 
 
 # Check if testType is valid
-if [[ "$testType" != "base" && "$testType" != "restart" && "$testType" != "mpi" && "$testType" != "omp" ]]; then
+if [[ "$testType" != "base" && "$testType" != "restart" && "$testType" != "mpi" && "$testType" != "multinode" && "$testType" != "omp" ]]; then
   echo "Error: Invalid testType '$testType'. Must be one of 'base', 'restart', 'mpi', or 'omp'."
   exit 1
 fi
@@ -188,6 +208,15 @@ baserunDir=${testcase}_${target}_base_${device}
 
 echo "TESTNAME : $TESTNAME"
 
+# from https://ncar-hpc-docs.readthedocs.io/en/latest/pbs/job-scripts/#derecho
+CI_NNODES=$(cat ${PBS_NODEFILE} | sort | uniq | wc -l)
+CI_NTASKS=$(cat ${PBS_NODEFILE} | sort | wc -l)
+CI_TASKS_PER_NODE=$((${CI_NTASKS} / ${CI_NNODES}))
+
+echo "CI_NNODES: $CI_NNODES , CI_NTASKS: $CI_NTASKS , CI_TASKS_PER_NODE: $CI_TASKS_PER_NODE"
+
+
+log_file="log.atmosphere.0000.out"
 
 # Re-evaluate input values for delayed expansion
 eval "rootDir=\$( realpath \"$rootDir\" )"
@@ -199,9 +228,11 @@ eval "moveFolder=\"$moveFolder\""
 eval "identicalFolder=\"$identicalFolder\""
 
 eval "runDir=\"$runDir\""
+eval "baserunDir=\"$baserunDir\""
 
 # Now set to realpath since it exists 
 runDir=$( realpath $runDir )
+baserunDir=$( realpath $baserunDir )
 
 rm -rf $runDir
 mkdir -p $runDir
@@ -263,12 +294,12 @@ fi
 
 if [[ "$testType" == "restart" ]]; then
   nml_replace "config_do_restart" "true" namelist.atmosphere
-  nml_replace "config_run_duration" "$runDuration" namelist.atmosphere
-  nml_replace "config_start_time" "$restartTime" namelist.atmosphere
+  nml_replace_quotes "config_run_duration" "$runDuration" namelist.atmosphere
+  nml_replace_quotes "config_start_time" "$restartTime" namelist.atmosphere
   if [ -n "$restartTime" ]; then
       restartTime_modified=$(echo "$restartTime" | tr ':' '.')
-      echo "trying to link $workingDirectory/test_base/restart.$restartTime_modified.nc"
-      ln -sf $workingDirectory/test_base/restart.$restartTime_modified.nc .
+      echo "trying to link $baserunDir/restart.$restartTime_modified.nc"
+      ln -sf $baserunDir/restart.$restartTime_modified.nc .
       #ln -sf $workingDirectory/test_base/restart.$restartTime.nc $workingDirectory/$runDir/restart.$restartTime.nc
   fi  
 fi
@@ -297,12 +328,12 @@ errorMsg=""
 banner 42 "START MPAS"
 
 # run MPAS
-echo "Running $parallelExecToUse $mpasExecutable"
+echo "Running $parallelExec $mpasExecutable"
 
-eval "$parallelExecToUse $mpasExecutable | tee mpas.print.out"
+eval "$parallelExec $mpasExecutable | tee mpas.print.out"
 result=$?
-if [ -n "$parallelExecToUse" ]; then
-  # Output the rsl. output
+if [ -n "$parallelExec" ]; then
+  # Output the log files
   cat $( ls ./log.atmosphere.* | sort | head -n 1 )
 fi
 
@@ -319,18 +350,26 @@ fi
 
 # If we passed, clean up after ourselves
 if [[ "$testType" != "base" ]]; then
-  diff_output $workingDirectory/$runDir/restart.0000-01-01_02.00.00.nc $workingDirectory/$baserunDir/restart.0000-01-01_02.00.00.nc 
+  diff_output $runDir/restart.0000-01-01_02.00.00.nc $baserunDir/restart.0000-01-01_02.00.00.nc 
   result=$?
 
   cd $workingDirectory
-  rm -rf test_$testType
+  #rm -rf test_$testType
 
   if [ "$result" -eq 0 ]; then
     echo "TEST $(basename $0) PASS"
+    exit 0
   else
     echo "TEST $(basename $0) FAIL"
     exit 1
   fi
+else
+
+log_file_path=$runDir/$log_file
+
+eval "totaltime=\$( sed -n '/timer_name/,/-------/p'  $log_file_path | awk '{print \$4}' | head -2 | tail -1 )"
+echo "Total time: $totaltime"
+  
 fi
 #if [ -z "$errorMsg" ]; then
 # Unlink everything we linked in
