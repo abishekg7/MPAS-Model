@@ -146,17 +146,17 @@
       },
       "steps" :
       {
-         //"make-nvhpc-release-gpu" :
-         //{
-         //  "command"      : ".ci/tests/build.sh"
+         "make-nvhpc-release-gpu" :
+         {
+           "command"      : ".ci/tests/build.sh"
            //"dependencies" : { "testcase-gnu-restart" : "afterok" }
-        // },
+         },
         "test_jw-nvhpc-base-gpu" :
         {
           "submit_options" : { "timelimit" : "00:15:00" },
           "command"      : ".ci/tests/runTestCases.sh",
-          "arguments" : ["-d", "gpu", "-t", "nvhpc", "-c", "jw", "-g", "base"]
-          //"dependencies" : { "make-nvhpc-release-gpu" : "afterok" }
+          "arguments" : ["-d", "gpu", "-t", "nvhpc", "-c", "jw", "-g", "base"],
+          "dependencies" : { "make-nvhpc-release-gpu" : "afterok" }
         },
         "test_jw-nvhpc-restart-gpu" :
         {
