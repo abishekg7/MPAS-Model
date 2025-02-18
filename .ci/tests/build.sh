@@ -34,7 +34,7 @@ cd $workingDirectory
 # Get some helper functions, AS_HOST must be set by this point to work
 . .ci/env/helpers.sh
 
-while getopts b:c:t:de:g:h opt; do
+while getopts b:c:t:dge:h opt; do
   case $opt in
     b)
       buildCommand="$OPTARG"

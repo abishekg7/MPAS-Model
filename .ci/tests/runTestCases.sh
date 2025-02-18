@@ -31,80 +31,9 @@ help()
   echo "If -i <folder> is provided, bitwise-identical checks are performed as part of checks"
 }
 
-nml_replace(){
-    PARAM=$1
-    VALUE=$2
-    FILE=$3
-    if grep -q '^[[:space:]]*'${PARAM}'[[:space:]]*=' ${FILE}; then
-        sed 's/\(^\s*'$PARAM'\s*=\s*\).*$/\1'${VALUE}'/' < ${FILE} > ${FILE}.out
-        mv ${FILE}.out ${FILE}
-    else
-        echo "$0:${FUNCNAME}: ERROR parameter ${PARAM} not found in ${FILE}"
-        exit 1
-    fi
-}
+cwd=$(dirname "$0")
 
-nml_replace_quotes(){
-    PARAM=$1
-    VALUE="'$2'"
-    FILE=$3
-    if grep -q '^[[:space:]]*'${PARAM}'[[:space:]]*=' ${FILE}; then
-        sed 's/\(^\s*'$PARAM'\s*=\s*\).*$/\1'${VALUE}'/' < ${FILE} > ${FILE}.out
-        mv ${FILE}.out ${FILE}
-    else
-        echo "$0:${FUNCNAME}: ERROR parameter ${PARAM} not found in ${FILE}"
-        exit 1
-    fi
-}
-
-stream_replace(){
-    FILETYPE=$1
-    PARAM=$2
-    VALUE=$3
-    FILE=$4
-    if grep -q '<[A-Za-z_]*stream name="'${FILETYPE}'"' ${FILE}; then
-        sed '/<.*stream name="'$FILETYPE'"/,/\/>/s/\('$PARAM'="\)[^"]*\(".*\)/\1'$VALUE'\2/' < ${FILE} > ${FILE}.out
-        mv ${FILE}.out ${FILE}
-    else
-        echo "$0:${FUNCNAME}: ERROR parameter ${FILETYPE} not found in ${FILE}"
-        exit 1
-    fi
-}
-
-
-function diff_output
-{
-    
-    FILE_TEST=$1
-    FILE_REF=$2
-
-    module load cdo
-    which cdo
-    
-    # status variable that is evaluated after the function call
-    STATUS=0
-    
-    if [ -f "$FILE_TEST" ] && [ -f "$FILE_REF" ]; then
-      echo "Comparing $FILE_TEST and $FILE_REF"
-      #DIFF_FILE="cdo_diffn_${DEXP1}_${DEXP2}_${TYPE}_${DATE}_${TEMP_SUFFIX}.out"
-      cdo diffv ${FILE_TEST} ${FILE_REF} #> ${DIFF_FILE}
-      STATUS=$?
-      if [ $STATUS == 0 ]; then
-            banner 42 "The experiments are bit-identical"
-            exit 0
-      else
-            banner 42 "The experiments are NOT bit-identical"
-            exit 1
-      fi
-		else
-		    echo "File(s) for $TYPE not found:"
-		    if ! [ -f  "$FILE_TEST" ]; then echo "FILE_TEST does not exist: $FILE_TEST"; fi
-		    if ! [ -f  "$FILE_REF" ]; then echo "FILE_REF does not exist: $FILE_REF"; fi
-        exit 1
-		fi
-}
-
-
+source $cwd/utils.sh
 
 echo "Input arguments:"
 echo "$*"
@@ -141,7 +70,7 @@ while getopts c:g:r:b:f:n:d:q:y:z:w:p:t:k:s:i:e:h opt; do
       mpasExecutable="$OPTARG"
     ;;
     f)
-      namelistFolder="$OPTARG"
+      caseInputDir="$OPTARG"
     ;;
     n)
       namelists="$OPTARG"
@@ -197,6 +126,13 @@ if [ ! -z $envVars ]; then
 fi
 
 
+# Check if testcase is valid
+if [[ "$testcase" != "jw" && "$testcase" != "conus" && "$testcase" != "aquaplanet" ]]; then
+  echo "Error: Invalid testcase '$testcase'. Must be one of 'jw', 'conus', or 'aquaplanet'."
+  exit 1
+fi
+
+
 # Check if testType is valid
 if [[ "$testType" != "base" && "$testType" != "restart" && "$testType" != "mpi" && "$testType" != "multinode" && "$testType" != "omp" ]]; then
   echo "Error: Invalid testType '$testType'. Must be one of 'base', 'restart', 'mpi', or 'omp'."
@@ -206,7 +142,8 @@ runDir=${testcase}_${target}_${testType}_${device}
 
 baserunDir=${testcase}_${target}_base_${device}
 
-echo "TESTNAME : $TESTNAME"
+TESTNAME="${testcase} ${target} ${testType} ${device}"
+echo "TEST : $TESTNAME"
 
 # from https://ncar-hpc-docs.readthedocs.io/en/latest/pbs/job-scripts/#derecho
 CI_NNODES=$(cat ${PBS_NODEFILE} | sort | uniq | wc -l)
@@ -220,7 +157,7 @@ log_file="log.atmosphere.0000.out"
 
 # Re-evaluate input values for delayed expansion
 eval "rootDir=\$( realpath \"$rootDir\" )"
-eval "namelistFolder=\$( realpath \"$namelistFolder\" )"
+eval "caseInputDir=\$( realpath \"$caseInputDir\" )"
 eval "namelists=\"$namelists\""
 #eval "data=\$( realpath \"$data\" )"
 eval "parallelExec=\"$parallelExec\""
@@ -251,8 +188,8 @@ if [ ! -x "${mpasExecutable}" ]; then
   exit 1
 fi
 
-if [ ! -d "${namelistFolder}" ]; then
-  echo "No valid namelist folder provided"
+if [ ! -d "${caseInputDir}" ]; then
+  echo "No valid Case Input Directory provided"
   exit 1
 fi
 
@@ -262,7 +199,11 @@ fi
 #
 # Things done only once
 # Go to core dir to make sure it exists
-cd $rootDir || exit $?
+#cd $rootDir || exit $?
+cd $workingDirectory || exit $?
+
+eval "repo_id=\$( git describe --abbrev=20 )"
+eval "repo_timestamp=\$( git show --no-patch --format=%ci )"
 
 # Clean up previous runs
 # rm wrfinput_d* wrfbdy_d* wrfout_d* wrfchemi_d* wrf_chem_input_d* rsl* real.print.out* wrf.print.out* wrf_d0*_runstats.out qr_acr_qg_V4.dat fort.98 fort.88 -rf
@@ -275,12 +216,12 @@ cd $runDir || exit $?
 
 
 # Copy namelist
-echo "Setting $namelistFolder/namelist.atmosphere  as namelist.atmosphere "
+echo "Setting $caseInputDir/namelist.atmosphere  as namelist.atmosphere "
 # remove old namelist.input which may be a symlink in which case this would have failed
 #rm namelist.input
-cp $namelistFolder/namelist.atmosphere namelist.atmosphere || exit $?
-cp $namelistFolder/streams.atmosphere streams.atmosphere || exit $?
-cp $namelistFolder/stream_list.atmosphere.output stream_list.atmosphere.output || exit $?
+cp $caseInputDir/namelist.atmosphere namelist.atmosphere || exit $?
+cp $caseInputDir/streams.atmosphere streams.atmosphere || exit $?
+cp $caseInputDir/stream_list.atmosphere.output stream_list.atmosphere.output || exit $?
 
 
 if [ -n "$restartInterval" ]; then
@@ -310,9 +251,32 @@ if [ -n "$restartInterval" ]; then
 fi
 
 # Link in data in here
-ln -sf $namelistFolder/x1.40962.grid.nc .
-ln -sf $namelistFolder/x1.40962.init.nc .
-ln -sf $namelistFolder/x1.40962.graph.info.part.* .
+if [[ "$testcase" == "jw" ]]; then
+    grid_file="x1.40962.grid.nc"
+    init_file="x1.40962.init.nc"
+    part_prefix="x1.40962.graph.info.part."
+    restart_compare_time='0000-01-01_02.00.00'
+elif  [[ "$testcase" == "conus" ]]; then
+    init_file="conus.init.nc"
+    part_prefix="conus.graph.info.part."
+    lbc_prefix='lbc.'
+    restart_compare_time='2019-09-01_00.20.00'
+    cp $caseInputDir/stream_list.atmosphere.diagnostics . || exit $?
+    cp $caseInputDir/stream_list.atmosphere.surface . || exit $?
+    ln -sf $workingDirectory/*.TBL . || exit $?
+    ln -sf $workingDirectory/*.DBL . || exit $?
+    ln -sf $caseInputDir/*.DBL . || exit $?
+    ln -sf $workingDirectory/*_DATA . || exit $?
+fi
+
+
+#ln -sf $caseInputDir/$grid_file .   || exit $?
+ln -sf $caseInputDir/$init_file .    || exit $?
+ln -sf $caseInputDir/${part_prefix}* .   || exit $?
+
+if [ -n "$lbc_prefix" ]; then
+    ln -sf $caseInputDir/${lbc_prefix}* .   || exit $?
+fi
 
 #
 ################################################################################
@@ -330,7 +294,8 @@ banner 42 "START MPAS"
 # run MPAS
 echo "Running $parallelExec $mpasExecutable"
 
-eval "$parallelExec $mpasExecutable | tee mpas.print.out"
+#eval "$parallelExec $mpasExecutable | tee mpas.print.out"
+eval "$parallelExec $mpasExecutable"
 result=$?
 if [ -n "$parallelExec" ]; then
   # Output the log files
@@ -340,9 +305,9 @@ fi
 
 
 if [ "$result" -eq 0 ]; then
-    banner 42 "TEST RUN: $testType FINISHED SUCCESSFULLY"
+    banner 42 "TEST RUN: $TESTNAME FINISHED SUCCESSFULLY"
 else
-    banner 42 "TEST RUN: $testType FAILED "
+    banner 42 "TEST RUN: $TESTNAME FAILED "
     exit 1
 fi
 
@@ -350,17 +315,17 @@ fi
 
 # If we passed, clean up after ourselves
 if [[ "$testType" != "base" ]]; then
-  diff_output $runDir/restart.0000-01-01_02.00.00.nc $baserunDir/restart.0000-01-01_02.00.00.nc 
+  diff_output $runDir/restart.${restart_compare_time}.nc $baserunDir/restart.${restart_compare_time}.nc
   result=$?
 
   cd $workingDirectory
   #rm -rf test_$testType
 
   if [ "$result" -eq 0 ]; then
-    echo "TEST $(basename $0) PASS"
+    echo "TEST $TESTNAME PASS"
     exit 0
   else
-    echo "TEST $(basename $0) FAIL"
+    echo "TEST $TESTNAME FAIL"
     exit 1
   fi
 else

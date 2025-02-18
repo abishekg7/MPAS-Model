@@ -30,21 +30,29 @@
           { 
             "-l " : { "select"       : 1, "ncpus" : 64, "mpiprocs" : 16  }
           },
-        ".*test.*(base|restart).*cpu.*::node_select" : 
+        ".*test_jw.*(base|restart).*cpu.*::node_select" : 
           { 
             "-l " : { "select"       : 1, "ncpus" : 1  }
           },
-        "test.*parallel.*cpu.*::node_select" :
+        "test_jw.*parallel.*cpu.*::node_select" :
         {
            "-l " : { "select"       : 1, "ncpus" : 16, "mpiprocs" : 4 } 
         },
-        ".*test.*(base|restart).*gpu.*::node_select" :
+        ".*test_jw.*(base|restart).*gpu.*::node_select" :
         {
            "-l " : { "select": 1, "ncpus": 16, "mpiprocs":1, "ngpus":1 } 
         },
-        ".*test.*multinode.*gpu.*::node_select" :
+        ".*test_jw.*multinode.*gpu.*::node_select" :
         {
            "-l " : { "select": 1, "ncpus": 16, "mpiprocs":2, "ngpus":2 } 
+        },
+        ".*test_conus.*(base|restart).*gpu.*::node_select" :
+        {
+           "-l " : { "select": 1, "ncpus": 16, "mpiprocs":2, "ngpus":2 } 
+        },
+        ".*test_conus.*multinode.*gpu.*::node_select" :
+        {
+           "-l " : { "select": 2, "ncpus": 16, "mpiprocs":1, "ngpus":1 } 
         },
         "priority"    : { "-l " : { "job_priority" : "economy"       } },
         "mail_events" : { "-m " : { "n" : ""}}
@@ -59,23 +67,32 @@
         ".*gnu.*::test_modules"   : [ "gcc/12.2.0","cray-mpich", "parallel-netcdf", "netcdf" ],
         ".*nvhpc.*::test_modules"   : [ "nvhpc/24.3","cray-mpich","ncarcompilers", "parallel-netcdf", "cuda" ],
         ".*test.*::args_namelist" : [ "-b", "atmosphere_model"],
-        ".*test_jw.*::args_namelist" : [ "-f", "/glade/derecho/scratch/agopal/jw_input/"],
+        ".*test_jw.*::args_namelist" : [ "-f", "/glade/campaign/mmm/wmr/mpas_ci/jw_baroclinic"],
+        ".*test_conus.*::args_namelist" : [ "-f", "/glade/campaign/mmm/wmr/mpas_ci/conus_lam"],
+        ".*test.*cpu.*::args_namelist" :
+          [ 
+            "-p", "mpiexec -n $CI_NTASKS -ppn $CI_TASKS_PER_NODE"
+          ],
         ".*test.*gpu.*::args_namelist" :
           [ 
             "-p", "mpiexec -n $CI_NTASKS -ppn $CI_TASKS_PER_NODE set_gpu_rank "
           ],
-        ".*test.*(base|parallel|multinode).*::args_namelist" :
-          [ 
-            "-q", "01:00:00",
-            "-w", "02:00:00"
-          ],
-          ".*test.*restart.*::args_namelist" :
+        //".*test.*(base|parallel|multinode).*::args_namelist" :
+        //  [ 
+        //    "-q", "01:00:00",
+        //    "-w", "02:00:00"
+        //  ],
+          ".*test_jw.*restart.*::args_namelist" :
           [ 
             "-g", "restart",
             "-y", "0000-01-01_01:00:00",
-            "-z", "01:00:00",
-            "-q", "01:00:00",
-            "-w", "02:00:00"
+            "-z", "01:00:00"
+          ],
+          ".*test_conus.*restart.*::args_namelist" :
+          [ 
+            "-g", "restart",
+            "-y", "2019-09-01_00:10:00",
+            "-z", "00:10:00"
           ],
         ".*test.*gnu.*::args_namelist" :
           [ 
@@ -154,6 +171,20 @@
           "command"      : ".ci/tests/runTestCases.sh",
           "arguments" : ["-d", "gpu", "-t", "nvhpc", "-c", "jw", "-g", "multinode"],
           "dependencies" : { "test_jw-nvhpc-restart-gpu" : "afterok" }
+        },
+        "test_conus-nvhpc-base-gpu" :
+        {
+          "submit_options" : { "timelimit" : "00:15:00" },
+          "command"      : ".ci/tests/runTestCases.sh",
+          "arguments" : ["-d", "gpu", "-t", "nvhpc", "-c", "conus", "-g", "base"],
+          "dependencies" : { "test_jw-nvhpc-multinode-gpu" : "afterok" }
+        },
+        "test_conus-nvhpc-restart-gpu" :
+        {
+          "submit_options" : { "timelimit" : "00:15:00" },
+          "command"      : ".ci/tests/runTestCases.sh",
+          "arguments" : ["-d", "gpu", "-t", "nvhpc", "-c", "conus", "-g", "restart"],
+          "dependencies" : { "test_conus-nvhpc-base-gpu" : "afterok" }
         }
         //"make-nvhpc-release-cpu" :
         //{
