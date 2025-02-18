@@ -30,7 +30,6 @@ on:
 # https://stackoverflow.com/a/68940067
 jobs:
   mytmptest:
-    runs-on: derecho
     if : ${{ github.event.label.name == 'my-tests' || github.event.label.name == 'all-tests' || github.event_name == 'push' }}
     strategy:
       max-parallel: 4
@@ -44,7 +43,7 @@ jobs:
             account : NMMM0013
             name : "MPAS Tests"
             id   : make-tests
-            fileroot : mpas_tests
+            config : .ci/mpas_tests.jsonc
             args : -j='{"node_select":{"-l ":{"select":1}}}'
             pool  : 8
             tpool : 1
