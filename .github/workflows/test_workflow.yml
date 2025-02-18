@@ -22,7 +22,7 @@ on :
       host     :
         required : true
         type     : string
-      fileroot :
+      config :
         required : true
         type     : string
       account  :
@@ -64,6 +64,13 @@ jobs:
         path      : main
         submodules: true
     
+    - name: Get fileroot of test config
+      id: get_fileroot
+      run: |
+        filename=$( basename ${{ inputs.config }} )
+        echo "rel_dir=$( dirname ${{ inputs.config }} )" >> "$GITHUB_ENV"
+        echo "fileroot=${filename%.*}" >> "$GITHUB_ENV"
+    
     # Immediately copy out to # of tests to do
     - name: Create testing directories
       if  : ${{ inputs.mkdirs }}
@@ -83,10 +90,10 @@ jobs:
       id  : runTest
       run: |
         if [ "${{ inputs.mkdirs }}" = "true" ]; then
-          ALT_DIRS="-alt ../${{ join( fromJson( inputs.tests ), '/.ci ../' ) }}/.ci"
+          ALT_DIRS="-alt ../${{ join( fromJson( inputs.tests ), format( '/{0} ../', env.rel_dir ) ) }}/$rel_dir"
         fi
         ./main/${{ inputs.hpc-workflows_path }}/.ci/runner.py                   \
-          ./main/.ci/${{ inputs.fileroot }}.json             \
+          ./main/${{ inputs.config }}             \
           -t   ${{ join( fromJson( inputs.tests ), ' ' ) }}  \
           -a "${{ inputs.account }}"                         \
           -p ${{ inputs.pool}} -tp ${{ inputs.tpool }}       \
@@ -98,20 +105,20 @@ jobs:
       if : ${{ failure() }}
       run : |
         # move log files to safe location
-        ./main/${{ inputs.hpc-workflows_path }}/.ci/relocator.py ./main/.ci/${{ inputs.fileroot }}.log ${{ inputs.archive }}/$LOG_SUFFIX/${{ inputs.id }}
+        ./main/${{ inputs.hpc-workflows_path }}/.ci/relocator.py ./main/$rel_dir/$fileroot.log ${{ inputs.archive }}/$LOG_SUFFIX/${{ inputs.id }}
 
         # report on them - alt dirs need extra help
         if [ "${{ inputs.mkdirs }}" = "true" ]; then
-          masterlogLoc=main/.ci
+          masterlogLoc=main/$rel_dir
         fi
-        ./main/${{ inputs.hpc-workflows_path }}/.ci/reporter.py ${{ inputs.archive }}/$LOG_SUFFIX/${{ inputs.id }}/$masterlogLoc/${{ inputs.fileroot }}.log \
+        ./main/${{ inputs.hpc-workflows_path }}/.ci/reporter.py ${{ inputs.archive }}/$LOG_SUFFIX/${{ inputs.id }}/$masterlogLoc/$fileroot.log \
                                              -e ./${{ inputs.hpc-workflows_path }}/.ci/runner.py                             \
                                              -o GITHUB -m # only mark fail steps with gh syntax
         
         # report on them
         echo "# Summary for ${{ join( fromJson( inputs.tests ), ' ' ) }}" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-        ./main/${{ inputs.hpc-workflows_path }}/.ci/reporter.py ${{ inputs.archive }}/$LOG_SUFFIX/${{ inputs.id }}/$masterlogLoc/${{ inputs.fileroot }}.log \
+        ./main/${{ inputs.hpc-workflows_path }}/.ci/reporter.py ${{ inputs.archive }}/$LOG_SUFFIX/${{ inputs.id }}/$masterlogLoc/$fileroot.log \
                                              -e ./${{ inputs.hpc-workflows_path }}/.ci/runner.py                                               \
                                              -s >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

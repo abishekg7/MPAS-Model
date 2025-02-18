@@ -64,7 +64,7 @@ jobs:
       name     : ${{ matrix.testSet.name }}
       id       : ${{ matrix.testSet.id }}
       host     : ${{ matrix.testSet.host }}
-      fileroot : ${{ matrix.testSet.fileroot }}
+      config   : ${{ matrix.testSet.config }}
       account  : ${{ matrix.testSet.account }}
       tests    : ${{ toJson( matrix.testSet.tests ) }}
       mkdirs   : ${{ matrix.testSet.mkdirs }}
