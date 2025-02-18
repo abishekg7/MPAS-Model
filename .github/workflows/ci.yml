@@ -53,6 +53,7 @@ jobs:
               # add new compilation tests here
 
     uses : ./.github/workflows/test_workflow.yml
+    runs-on: self-hosted
     with :
       # This should be the only hard-coded value, we don't use ${{ github.event.label.name }}
       # to avoid 'all-tests' to be used in this workflow
