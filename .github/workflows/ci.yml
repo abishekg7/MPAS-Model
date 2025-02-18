@@ -43,7 +43,7 @@ jobs:
             account : NMMM0013
             name : "MPAS Tests"
             id   : make-tests
-            fileroot : mpas_tests
+            config : .ci/mpas_tests.jsonc
             args : -j='{"node_select":{"-l ":{"select":1}}}'
             pool  : 8
             tpool : 1
