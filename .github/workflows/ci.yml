@@ -29,7 +29,8 @@ on:
 #   - < next test >
 # https://stackoverflow.com/a/68940067
 jobs:
-  buildtests:
+  mytmptest:
+    runs-on: derecho
     if : ${{ github.event.label.name == 'my-tests' || github.event.label.name == 'all-tests' || github.event_name == 'push' }}
     strategy:
       max-parallel: 4
@@ -39,7 +40,7 @@ jobs:
         testSet  :
           - host : derecho
             hpc-workflows_path : .ci/hpc-workflows
-            archive : /glade/work/aislas/github/runners/mpas/derecho/logs/
+            archive : /glade/work/agopal/github/runners/mpas/derecho/logs/
             account : NMMM0013
             name : "MPAS Tests"
             id   : make-tests
@@ -52,8 +53,7 @@ jobs:
               - nvhpc
               # add new compilation tests here
 
-    uses : ./.github/workflows/test_workflow.yml
-    runs-on: self-hosted
+    uses : ./.github/workflows/test_workflow.yml    
     with :
       # This should be the only hard-coded value, we don't use ${{ github.event.label.name }}
       # to avoid 'all-tests' to be used in this workflow
