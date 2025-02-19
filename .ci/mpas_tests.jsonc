@@ -69,11 +69,11 @@
         ".*test.*::args_namelist" : [ "-b", "atmosphere_model"],
         ".*test_jw.*::args_namelist" : [ "-f", "/glade/campaign/mmm/wmr/mpas_ci/jw_baroclinic"],
         ".*test_conus.*::args_namelist" : [ "-f", "/glade/campaign/mmm/wmr/mpas_ci/conus_lam"],
-        ".*test.*cpu.*::args_namelist" :
+        ".*test_.*cpu.*::args_namelist" :
           [ 
             "-p", "mpiexec -n $CI_NTASKS -ppn $CI_TASKS_PER_NODE"
           ],
-        ".*test.*gpu.*::args_namelist" :
+        ".*test_.*gpu.*::args_namelist" :
           [ 
             "-p", "mpiexec -n $CI_NTASKS -ppn $CI_TASKS_PER_NODE set_gpu_rank "
           ],
@@ -134,22 +134,38 @@
         }
       }
     },
-    "nvhpc" :
+    "nvhpc-cpu" :
     {
-      "submit_options" :
-      {
-        "arguments" :
+      "steps" :
+      {      
+        "make-nvhpc-release-cpu" :
         {
-          // Remove auto-filled dir and supply sub-testcase specific ones
-          ".*testcase.*::args_namelist_dir" : [ ]
+        "command"      : ".ci/tests/build.sh"
+        },
+        "test_jw-nvhpc-base-cpu" :
+        {
+         "submit_options" : { "timelimit" : "00:15:00" },
+         "command"      : ".ci/tests/runTestCases.sh",
+         "arguments" : ["-d", "cpu", "-t", "nvhpc", "-c", "jw", "-g", "base"],
+         "dependencies" : { "make-nvhpc-release-cpu" : "afterok" }
+        },
+        "test_jw-nvhpc-restart-cpu" :
+        {
+         "submit_options" : { "timelimit" : "00:15:00" },
+         "command"      : ".ci/tests/runTestCases.sh",
+         "arguments" : ["-d", "cpu", "-t", "nvhpc", "-c", "jw", "-g", "restart"],
+         "dependencies" : { "test_jw-nvhpc-base-cpu" : "afterok" }
         }
-      },
+
+      }
+    },
+    "nvhpc-gpu" :
+    {
       "steps" :
       {
          "make-nvhpc-release-gpu" :
          {
            "command"      : ".ci/tests/build.sh"
-           //"dependencies" : { "testcase-gnu-restart" : "afterok" }
          },
         "test_jw-nvhpc-base-gpu" :
         {
@@ -186,25 +202,6 @@
           "arguments" : ["-d", "gpu", "-t", "nvhpc", "-c", "conus", "-g", "restart"],
           "dependencies" : { "test_conus-nvhpc-base-gpu" : "afterok" }
         }
-        //"make-nvhpc-release-cpu" :
-        //{
-        // "command"      : ".ci/tests/build.sh",
-        // "dependencies" : { "test_jw-nvhpc-multinode-gpu" : "afterok" }
-        //},
-        //"test_jw-nvhpc-base-cpu" :
-        //{
-        //  "submit_options" : { "timelimit" : "00:15:00" },
-        //  "command"      : ".ci/tests/runTestCases.sh",
-        //  "arguments" : ["-d", "cpu", "-t", "nvhpc", "-c", "jw", "-g", "base"],
-        //  "dependencies" : { "make-nvhpc-release-cpu" : "afterok" }
-        //},
-        //"test_jw-nvhpc-restart-cpu" :
-        //{
-        //  "submit_options" : { "timelimit" : "00:15:00" },
-        //  "command"      : ".ci/tests/runTestCases.sh",
-        //  "arguments" : ["-d", "cpu", "-t", "nvhpc", "-c", "jw", "-g", "restart"],
-        //  "dependencies" : { "test_jw-nvhpc-base-cpu" : "afterok" }
-        //}
 
       }
     }
