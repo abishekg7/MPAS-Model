@@ -53,6 +53,31 @@ jobs:
               - nvhpc-cpu
               - gnu
               # add new compilation tests here
+    uses : ./.github/workflows/test_workflow.yml    
+    with :
+      # This should be the only hard-coded value, we don't use ${{ github.event.label.name }}
+      # to avoid 'all-tests' to be used in this workflow
+      label    : my-tests
+
+      # Everything below this should remain the same and comes from the testSet matrix
+      hpc-workflows_path : ${{ matrix.testSet.hpc-workflows_path }}
+      archive  : ${{ matrix.testSet.archive }}
+      name     : ${{ matrix.testSet.name }}
+      id       : ${{ matrix.testSet.id }}
+      host     : ${{ matrix.testSet.host }}
+      config   : ${{ matrix.testSet.config }}
+      account  : ${{ matrix.testSet.account }}
+      tests    : ${{ toJson( matrix.testSet.tests ) }}
+      mkdirs   : ${{ matrix.testSet.mkdirs }}
+      args     : ${{ matrix.testSet.args }}
+      pool     : ${{ matrix.testSet.pool }}
+      tpool    : ${{ matrix.testSet.tpool }}
+    permissions:
+      contents: read
+      pull-requests: write
+    name : Test ${{ matrix.testSet.name }} on ${{ matrix.testSet.host }}
+
+
   mytmptest:
     if : ${{ github.event.label.name == 'my-tests' || github.event.label.name == 'all-tests' || github.event_name == 'push' }}
     strategy:
