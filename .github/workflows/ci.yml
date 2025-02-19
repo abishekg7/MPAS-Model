@@ -10,6 +10,8 @@ on:
 # https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#pull-request-events-for-forked-repositories-2
   pull_request:
     types:    [ labeled ]
+  issue_comment:
+    types:    [ created ]
 
 # https://docs.github.com/en/actions/sharing-automations/reusing-workflows#supported-keywords-for-jobs-that-call-a-reusable-workflow
 # Also https://stackoverflow.com/a/74959635
@@ -29,6 +31,28 @@ on:
 #   - < next test >
 # https://stackoverflow.com/a/68940067
 jobs:
+  mycommenttest:
+    if : ${{ github.event_name == 'issue_comment' && contains(github.event.comment.body, '/test') }}
+    strategy:
+      max-parallel: 4
+      fail-fast: false
+      matrix:     
+        testSet  :
+          - host : derecho
+            hpc-workflows_path : .ci/hpc-workflows
+            archive : /glade/work/agopal/github/runners/mpas/derecho/logs/
+            account : NMMM0013
+            name : "MPAS Tests"
+            id   : make-tests
+            config : .ci/mpas_tests.jsonc
+            args : -j='{"node_select":{"-l ":{"select":1}}}'
+            pool  : 8
+            tpool : 1
+            mkdirs : true
+            tests :
+              - nvhpc-cpu
+              - gnu
+              # add new compilation tests here
   mytmptest:
     if : ${{ github.event.label.name == 'my-tests' || github.event.label.name == 'all-tests' || github.event_name == 'push' }}
     strategy:
