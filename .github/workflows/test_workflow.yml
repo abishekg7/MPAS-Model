@@ -59,6 +59,11 @@ jobs:
     env :
       LOG_SUFFIX : ${{ github.event_name == 'push' && 'master' || github.event.number }}
     steps:
+    - name: Put a reaction to the comment
+        run: gh api graphql --silent --raw-field query="mutation AddReaction {addReaction(input:{subjectId:\"$NODE_ID\",content:EYES}){reaction{content}subject{id}}}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_ID: ${{ github.event.comment.node_id }}
     - uses: actions/checkout@v4
       with:
         path      : main
