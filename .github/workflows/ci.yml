@@ -32,7 +32,7 @@ on:
 # https://stackoverflow.com/a/68940067
 jobs:
   mycommenttest:
-    if : ${{ github.event.issue.pull_request && contains(github.event.comment.body, '/test') }}
+    if : ${{ github.event.issue.pull_request && github.event.comment.body == '/test' }}
     strategy:
       max-parallel: 4
       fail-fast: false
