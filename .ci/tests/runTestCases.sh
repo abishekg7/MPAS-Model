@@ -134,7 +134,7 @@ fi
 
 
 # Check if testType is valid
-if [[ "$testType" != "base" && "$testType" != "restart" && "$testType" != "mpi" && "$testType" != "multinode" && "$testType" != "omp" ]]; then
+if [[ "$testType" != "base" && "$testType" != "restart" && "$testType" != "mpi" && "$testType" != "multinode" && "$testType" != "omp" && "$testType" != "perf" ]]; then
   echo "Error: Invalid testType '$testType'. Must be one of 'base', 'restart', 'mpi', or 'omp'."
   exit 1
 fi
@@ -161,8 +161,6 @@ eval "caseInputDir=\$( realpath \"$caseInputDir\" )"
 eval "namelists=\"$namelists\""
 #eval "data=\$( realpath \"$data\" )"
 eval "parallelExec=\"$parallelExec\""
-eval "moveFolder=\"$moveFolder\""
-eval "identicalFolder=\"$identicalFolder\""
 
 eval "runDir=\"$runDir\""
 eval "baserunDir=\"$baserunDir\""
@@ -250,6 +248,13 @@ if [ -n "$restartInterval" ]; then
   stream_replace "restart" "output_interval" "$restartInterval" streams.atmosphere
 fi
 
+if [[ "$testType" == "perf" ]]; then
+  nml_replace_quotes "config_run_duration" "$runDuration" namelist.atmosphere
+  stream_replace "restart" "output_interval" "none" streams.atmosphere
+  stream_replace "output" "output_interval" "none" streams.atmosphere
+fi
+
+
 # Link in data in here
 if [[ "$testcase" == "jw" ]]; then
     grid_file="x1.40962.grid.nc"
@@ -313,8 +318,7 @@ fi
 
   
 
-# If we passed, clean up after ourselves
-if [[ "$testType" != "base" ]]; then
+if [[ "$testType" != "perf" ]]; then
   diff_output $runDir/restart.${restart_compare_time}.nc $baserunDir/restart.${restart_compare_time}.nc
   result=$?
 
@@ -332,9 +336,29 @@ else
 
 log_file_path=$runDir/$log_file
 
-eval "totaltime=\$( sed -n '/timer_name/,/-------/p'  $log_file_path | awk '{print \$4}' | head -2 | tail -1 )"
-echo "Total time: $totaltime"
-  
+#eval "totaltime_1=\$( sed -n '/timer_name/,/-------/p'  $log_file_path | awk '{print \$4}' | head -2 | tail -1 )"
+extract_totaltime $log_file_path
+totaltime_1=$totaltime
+echo "Total time: $totaltime_1"
+
+# If the testType is perf, run the code two more times and calculate the average time
+
+for i in {2..5}; do
+  eval "$parallelExec $mpasExecutable"
+  extract_totaltime $log_file_path
+  eval "totaltime_$i=$totaltime"
+  #echo "Total time: $totaltime_$i"
+  eval "echo "Total time: \$totaltime_$i""
+done
+
+db_file="/glade/campaign/mmm/wmr/mpas_ci/test2.db"
+
+machine="derecho"
+
+#eval "python $workingDirectory/.ci/tests/perf_stats.py $db_file $testcase $machine $device $target $repo_id $totaltime_1,$totaltime_2,$totaltime_3,$totaltime_4,$totaltime_5"
+
+eval "python $workingDirectory/.ci/tests/query_perf_db.py compare_to_ref $db_file $testcase $machine $device $target $totaltime_1,$totaltime_2,$totaltime_3,$totaltime_4,$totaltime_5"
+
 fi
 #if [ -z "$errorMsg" ]; then
 # Unlink everything we linked in

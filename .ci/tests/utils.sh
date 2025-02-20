@@ -40,6 +40,12 @@ stream_replace(){
     fi
 }
 
+function extract_totaltime(){
+    log_file_path=$1
+
+    eval "totaltime=\$( sed -n '/timer_name/,/-------/p'  $log_file_path | awk '{print \$4}' | head -2 | tail -1 )"
+}
+
 
 function diff_output
 {

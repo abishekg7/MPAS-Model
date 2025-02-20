@@ -34,9 +34,13 @@
           { 
             "-l " : { "select"       : 1, "ncpus" : 1  }
           },
-        "test_jw.*parallel.*cpu.*::node_select" :
+        ".*test_jw.*parallel.*cpu.*::node_select" :
         {
            "-l " : { "select"       : 1, "ncpus" : 16, "mpiprocs" : 4 } 
+        },
+        ".*test_jw.*perf.*cpu.*::node_select" :
+        {
+           "-l " : { "select"       : 1, "ncpus" : 16, "mpiprocs" : 4 }
         },
         ".*test_jw.*(base|restart).*gpu.*::node_select" :
         {
@@ -54,6 +58,10 @@
         {
            "-l " : { "select": 2, "ncpus": 16, "mpiprocs":1, "ngpus":1 } 
         },
+        // ".*test_jw.*perf.*cpu.*::node_place" :
+        // {
+        //    "-l " : { "place"       : "excl"}
+        // },
         "priority"    : { "-l " : { "job_priority" : "economy"       } },
         "mail_events" : { "-m " : { "n" : ""}}
       },
@@ -84,14 +92,20 @@
         //  ],
           ".*test_jw.*restart.*::args_namelist" :
           [ 
-            "-g", "restart",
             "-y", "0000-01-01_01:00:00",
             "-z", "01:00:00"
           ],
           ".*test_conus.*restart.*::args_namelist" :
           [ 
-            "-g", "restart",
             "-y", "2019-09-01_00:10:00",
+            "-z", "00:10:00"
+          ],
+          ".*test_jw.*perf.*::args_namelist" :
+          [ 
+            "-z", "01:00:00"
+          ],
+          ".*test_conus.*perf.*::args_namelist" :
+          [ 
             "-z", "00:10:00"
           ],
         ".*test.*gnu.*::args_namelist" :
@@ -138,22 +152,30 @@
     {
       "steps" :
       {      
-        "make-nvhpc-release-cpu" :
-        {
-        "command"      : ".ci/tests/build.sh"
-        },
+        // "make-nvhpc-release-cpu" :
+        // {
+        // //"command"      : ".ci/tests/build.sh"
+        // "command"      : "echo 'Skipping build'"
+        // },
         "test_jw-nvhpc-base-cpu" :
         {
          "submit_options" : { "timelimit" : "00:15:00" },
          "command"      : ".ci/tests/runTestCases.sh",
-         "arguments" : ["-d", "cpu", "-t", "nvhpc", "-c", "jw", "-g", "base"],
-         "dependencies" : { "make-nvhpc-release-cpu" : "afterok" }
+         "arguments" : ["-d", "cpu", "-t", "nvhpc", "-c", "jw", "-g", "base"]
+         //"dependencies" : { "make-nvhpc-release-cpu" : "afterok" }
         },
         "test_jw-nvhpc-restart-cpu" :
         {
          "submit_options" : { "timelimit" : "00:15:00" },
          "command"      : ".ci/tests/runTestCases.sh",
          "arguments" : ["-d", "cpu", "-t", "nvhpc", "-c", "jw", "-g", "restart"],
+         "dependencies" : { "test_jw-nvhpc-base-cpu" : "afterok" }
+        },
+        "test_jw-nvhpc-perf-cpu" :
+        {
+         "submit_options" : { "timelimit" : "00:15:00" },
+         "command"      : ".ci/tests/runTestCases.sh",
+         "arguments" : ["-d", "cpu", "-t", "nvhpc", "-c", "jw", "-g", "perf"],
          "dependencies" : { "test_jw-nvhpc-base-cpu" : "afterok" }
         }
 
