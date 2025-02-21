@@ -200,7 +200,8 @@ fi
 #cd $rootDir || exit $?
 cd $workingDirectory || exit $?
 
-eval "repo_id=\$( git describe --abbrev=20 )"
+#eval "repo_id=\$( git describe --abbrev=20 )"
+eval "repo_id=\$( git rev-parse --short=20 HEAD )"  # github actions doesn't fetch tags yet
 eval "repo_timestamp=\$( git show --no-patch --format=%ci )"
 
 # Clean up previous runs

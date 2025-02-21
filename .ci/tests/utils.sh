@@ -60,22 +60,21 @@ function diff_output
     STATUS=0
     
     if [ -f "$FILE_TEST" ] && [ -f "$FILE_REF" ]; then
-      echo "Comparing $FILE_TEST and $FILE_REF"
-      #DIFF_FILE="cdo_diffn_${DEXP1}_${DEXP2}_${TYPE}_${DATE}_${TEMP_SUFFIX}.out"
-      cdo diffv ${FILE_TEST} ${FILE_REF} #> ${DIFF_FILE}
-      STATUS=$?
-      if [ $STATUS == 0 ]; then
-            banner 42 "The experiments are bit-identical"
-            exit 0
-      else
-            banner 42 "The experiments are NOT bit-identical"
-            exit 1
-      fi
-		else
-		    echo "File(s) for $TYPE not found:"
-		    if ! [ -f  "$FILE_TEST" ]; then echo "FILE_TEST does not exist: $FILE_TEST"; fi
-		    if ! [ -f  "$FILE_REF" ]; then echo "FILE_REF does not exist: $FILE_REF"; fi
-        exit 1
-		fi
+        echo "Comparing $FILE_TEST and $FILE_REF"
+        cdo diffv ${FILE_TEST} ${FILE_REF} #> ${DIFF_FILE}
+        STATUS=$?
+        if [ $STATUS == 0 ]; then
+                banner 42 "The experiments are bit-identical"
+                return 0
+        else
+                banner 42 "The experiments are NOT bit-identical"
+                return 1
+        fi
+    else
+        echo "File(s) for $TYPE not found:"
+        if ! [ -f  "$FILE_TEST" ]; then echo "FILE_TEST does not exist: $FILE_TEST"; fi
+        if ! [ -f  "$FILE_REF" ]; then echo "FILE_REF does not exist: $FILE_REF"; fi
+        return 1
+    fi
 }
 
