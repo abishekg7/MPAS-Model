@@ -121,9 +121,8 @@ jobs:
         
         echo "# Summary for ${{ join( fromJson( inputs.tests ), ' ' ) }}" >> $GITHUB_STEP_SUMMARY
 
-        ./main/.ci/reporter.py ${{ inputs.archive }}/$LOG_SUFFIX/${{ inputs.id }}/$masterlogLoc/$fileroot.log \
-                                             -e ./${{ inputs.hpc-workflows_path }}/.ci/runner.py                                               \
-                                             -s >> $GITHUB_STEP_SUMMARY        
+        GITHUB_STEP_SUMMARY=$( ./main/.ci/reporter.py ${{ inputs.archive }}/$LOG_SUFFIX/${{ inputs.id }}/$masterlogLoc/$fileroot.log \
+                                             -e ./${{ inputs.hpc-workflows_path }}/.ci/runner.py  -s )
 
         echo " --------- GITHUB_STEP_SUMMARY: $GITHUB_STEP_SUMMARY"
 
