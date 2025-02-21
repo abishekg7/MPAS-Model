@@ -125,6 +125,8 @@ jobs:
                                              -e ./${{ inputs.hpc-workflows_path }}/.ci/runner.py                                               \
                                              -s >> $GITHUB_STEP_SUMMARY        
 
+        echo " --------- GITHUB_STEP_SUMMARY: $GITHUB_STEP_SUMMARY"
+
     - name: Generate list using Markdown
       run: |
         echo "This is the lead in sentence for the list" >> $GITHUB_STEP_SUMMARY
