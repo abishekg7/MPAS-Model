@@ -63,6 +63,8 @@ jobs:
       with:
         path      : main
         submodules: true
+        fetch-tags: true
+        fetch-depth: 50
     
     - name: Get fileroot of test config
       id: get_fileroot
