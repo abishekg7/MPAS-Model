@@ -134,7 +134,7 @@ fi
 
 
 # Check if testType is valid
-if [[ "$testType" != "base" && "$testType" != "restart" && "$testType" != "mpi" && "$testType" != "multinode" && "$testType" != "omp" && "$testType" != "perf" ]]; then
+if [[ "$testType" != "base" && "$testType" != "restart" && "$testType" != "mpi" && "$testType" != "multigpu" && "$testType" != "omp" && "$testType" != "perf" ]]; then
   echo "Error: Invalid testType '$testType'. Must be one of 'base', 'restart', 'mpi', or 'omp'."
   exit 1
 fi
@@ -355,9 +355,9 @@ db_file="/glade/campaign/mmm/wmr/mpas_ci/test2.db"
 
 machine="derecho"
 
-#eval "python $workingDirectory/.ci/tests/perf_stats.py $db_file $testcase $machine $device $target $repo_id $totaltime_1,$totaltime_2,$totaltime_3,$totaltime_4,$totaltime_5"
+eval "python $workingDirectory/.ci/tests/perf_stats.py $db_file $testcase $machine $device $target $repo_id $totaltime_1,$totaltime_2,$totaltime_3,$totaltime_4,$totaltime_5"
 
-eval "python $workingDirectory/.ci/tests/query_perf_db.py compare_to_ref $db_file $testcase $machine $device $target $totaltime_1,$totaltime_2,$totaltime_3,$totaltime_4,$totaltime_5"
+#eval "python $workingDirectory/.ci/tests/query_perf_db.py compare_to_ref $db_file $testcase $machine $device $target $totaltime_1,$totaltime_2,$totaltime_3,$totaltime_4,$totaltime_5"
 
 fi
 #if [ -z "$errorMsg" ]; then

@@ -46,7 +46,7 @@
         {
            "-l " : { "select": 1, "ncpus": 16, "mpiprocs":1, "ngpus":1 } 
         },
-        ".*test_jw.*multinode.*gpu.*::node_select" :
+        ".*test_jw.*(multigpu|perf).*gpu.*::node_select" :
         {
            "-l " : { "select": 1, "ncpus": 16, "mpiprocs":2, "ngpus":2 } 
         },
@@ -152,17 +152,16 @@
     {
       "steps" :
       {      
-        // "make-nvhpc-release-cpu" :
-        // {
-        // //"command"      : ".ci/tests/build.sh"
-        // "command"      : "echo 'Skipping build'"
-        // },
+        "make-nvhpc-release-cpu" :
+        {
+        "command"      : ".ci/tests/build.sh"
+        },
         "test_jw-nvhpc-base-cpu" :
         {
          "submit_options" : { "timelimit" : "00:15:00" },
          "command"      : ".ci/tests/runTestCases.sh",
-         "arguments" : ["-d", "cpu", "-t", "nvhpc", "-c", "jw", "-g", "base"]
-         //"dependencies" : { "make-nvhpc-release-cpu" : "afterok" }
+         "arguments" : ["-d", "cpu", "-t", "nvhpc", "-c", "jw", "-g", "base"],
+         "dependencies" : { "make-nvhpc-release-cpu" : "afterok" }
         },
         "test_jw-nvhpc-restart-cpu" :
         {
@@ -203,11 +202,18 @@
           "arguments" : ["-d", "gpu", "-t", "nvhpc", "-c", "jw", "-g", "restart"],
           "dependencies" : { "test_jw-nvhpc-base-gpu" : "afterok" }
         },
-        "test_jw-nvhpc-multinode-gpu" :
+        "test_jw-nvhpc-multigpu-gpu" :
         {
           "submit_options" : { "timelimit" : "00:15:00" },
           "command"      : ".ci/tests/runTestCases.sh",
-          "arguments" : ["-d", "gpu", "-t", "nvhpc", "-c", "jw", "-g", "multinode"],
+          "arguments" : ["-d", "gpu", "-t", "nvhpc", "-c", "jw", "-g", "parallel"],
+          "dependencies" : { "test_jw-nvhpc-restart-gpu" : "afterok" }
+        },
+        "test_jw-nvhpc-perf-gpu" :
+        {
+          "submit_options" : { "timelimit" : "00:15:00" },
+          "command"      : ".ci/tests/runTestCases.sh",
+          "arguments" : ["-d", "gpu", "-t", "nvhpc", "-c", "jw", "-g", "perf"],
           "dependencies" : { "test_jw-nvhpc-restart-gpu" : "afterok" }
         },
         "test_conus-nvhpc-base-gpu" :
@@ -215,7 +221,7 @@
           "submit_options" : { "timelimit" : "00:15:00" },
           "command"      : ".ci/tests/runTestCases.sh",
           "arguments" : ["-d", "gpu", "-t", "nvhpc", "-c", "conus", "-g", "base"],
-          "dependencies" : { "test_jw-nvhpc-multinode-gpu" : "afterok" }
+          "dependencies" : { "test_jw-nvhpc-multigpu-gpu" : "afterok" }
         },
         "test_conus-nvhpc-restart-gpu" :
         {
