@@ -104,7 +104,7 @@ jobs:
 
 
     - name: Report failed tests and steps
-      if : ${{ failure() }}
+      #if : ${{ failure() }}
       run : |
         # move log files to safe location
         ./main/${{ inputs.hpc-workflows_path }}/.ci/relocator.py ./main/$rel_dir/$fileroot.log ${{ inputs.archive }}/$LOG_SUFFIX/${{ inputs.id }}

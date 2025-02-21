@@ -98,7 +98,7 @@ jobs:
             tpool : 1
             mkdirs : true
             tests :
-              - nvhpc-cpu
+              - gnu
               # add new compilation tests here
 
     uses : ./.github/workflows/test_workflow.yml    
