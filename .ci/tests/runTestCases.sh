@@ -326,13 +326,7 @@ if [[ "$testType" != "perf" ]]; then
   cd $workingDirectory
   #rm -rf test_$testType
 
-  if [ "$result" -eq 0 ]; then
-    echo "TEST $TESTNAME PASS"
-    exit 0
-  else
-    echo "TEST $TESTNAME FAIL"
-    exit 1
-  fi
+  
 else
 
 log_file_path=$runDir/$log_file
@@ -357,9 +351,18 @@ db_file="/glade/campaign/mmm/wmr/mpas_ci/test2.db"
 machine="derecho"
 
 eval "python $workingDirectory/.ci/tests/perf_stats.py $db_file $testcase $machine $device $target $repo_id $totaltime_1,$totaltime_2,$totaltime_3,$totaltime_4,$totaltime_5"
-
+result=$?
 #eval "python $workingDirectory/.ci/tests/query_perf_db.py compare_to_ref $db_file $testcase $machine $device $target $totaltime_1,$totaltime_2,$totaltime_3,$totaltime_4,$totaltime_5"
 
+fi
+
+
+if [ "$result" -eq 0 ]; then
+    echo "TEST $TESTNAME PASS"
+    echo "TEST $(basename $0) PASS"
+else
+    echo "TEST $TESTNAME FAIL"
+    exit 1
 fi
 #if [ -z "$errorMsg" ]; then
 # Unlink everything we linked in
