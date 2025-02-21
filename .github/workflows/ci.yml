@@ -99,6 +99,7 @@ jobs:
             mkdirs : true
             tests :
               - gnu
+              - nhvpc-cpu
               # add new compilation tests here
 
     uses : ./.github/workflows/test_workflow.yml    
