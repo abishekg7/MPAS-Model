@@ -49,13 +49,13 @@ def getLogsPrintedStr( masterDict, masterLog ) :
 
 def getSummaryPrintedStr( masterDict, metadata ) :
   indent = "  "
-  outputFormat = "{name:<24} {reason:<40}\n"
+  outputHeadFormat = " TESTSUITE {name:<24} : {status:<24}   \n"
+  outputTblFormat = "| {name:<24} | {status:<24} | {reason:<40} | \n"
   cmdFormat    = "{runner} {file} -t {test} {offset} -s LOCAL"
-  output = "SUMMARY OF TEST FAILURES\n" + outputFormat.format( name="NAME", reason="REASON" )
+  output = "SUMMARY OF TEST FAILURES\n" 
+  #output += outputFormat.format( name="NAME", status="STATUS", reason="REASON" )
   for test, testlog in masterDict.items() :
-    print(test, testlog)
-    print(metadata["rel_exec"])
-    print(metadata["rel_prefix"])
+    output += "\n ----- \n "
     #if not testlog["success"] :
     testCmd = cmdFormat.format(
                                 runner=metadata["rel_exec"],
@@ -63,11 +63,26 @@ def getSummaryPrintedStr( masterDict, metadata ) :
                                 test=test,
                                 offset="" if metadata["rel_offset"] == "" else "-d " + metadata["rel_offset"]
                                 )
-    output += outputFormat.format( name=test, reason=testlog[ "line" ] ) + "[TO REPRODUCE LOCALLY] : " + testCmd + "\n"
+    if testlog["success"]:
+      status_emoji = "PASSED :white_check_mark:"
+      reason = " "
+    else:
+      status_emoji = "FAILED :red_circle:"
+      reason = testlog[ "line" ]
+    output += outputHeadFormat.format( name=test, status=status_emoji)
+    output += outputTblFormat.format( name="STEP", status="STATUS", reason="REASON" )
+    output += outputTblFormat.format( name="--------", status="--------", reason="--------" )
     for step, steplog in testlog["steps"].items() :
       #if not steplog["success"] :
-      output += outputFormat.format( name=indent * 1 + step, reason=steplog[ "line" ] )
-
+      if steplog["success"]:
+        status_emoji = ":white_check_mark:"
+        reason = " "
+      else:
+        status_emoji = ":red_circle:"
+        reason = steplog[ "line" ]
+      output += outputTblFormat.format( name=step, status=status_emoji, reason=reason )
+      #output += outputFormat.format( name=indent * 1 + step, reason=steplog[ "line" ] )
+    output += "\n\n\n [TO REPRODUCE LOCALLY] : " + testCmd + "\n\n"
   return output
 
 
