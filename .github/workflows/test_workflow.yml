@@ -113,9 +113,9 @@ jobs:
         if [ "${{ inputs.mkdirs }}" = "true" ]; then
           masterlogLoc=main/$rel_dir
         fi
-        ./main/.ci/reporter.py ${{ inputs.archive }}/$LOG_SUFFIX/${{ inputs.id }}/$masterlogLoc/$fileroot.log \
-                                             -e ./${{ inputs.hpc-workflows_path }}/.ci/runner.py                             \
-                                             -o GITHUB -m # only mark fail steps with gh syntax
+        #./main/.ci/reporter.py ${{ inputs.archive }}/$LOG_SUFFIX/${{ inputs.id }}/$masterlogLoc/$fileroot.log \
+        #                                     -e ./${{ inputs.hpc-workflows_path }}/.ci/runner.py                             \
+        #                                     -o GITHUB -m # only mark fail steps with gh syntax
         
         # report on them
         
