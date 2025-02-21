@@ -113,9 +113,6 @@ jobs:
         if [ "${{ inputs.mkdirs }}" = "true" ]; then
           masterlogLoc=main/$rel_dir
         fi
-        #./main/.ci/reporter.py ${{ inputs.archive }}/$LOG_SUFFIX/${{ inputs.id }}/$masterlogLoc/$fileroot.log \
-        #                                     -e ./${{ inputs.hpc-workflows_path }}/.ci/runner.py                             \
-        #                                     -o GITHUB -m # only mark fail steps with gh syntax
         
         # report on them
         
@@ -124,13 +121,9 @@ jobs:
         ./main/.ci/reporter.py ${{ inputs.archive }}/$LOG_SUFFIX/${{ inputs.id }}/$masterlogLoc/$fileroot.log \
                                -e ./${{ inputs.hpc-workflows_path }}/.ci/runner.py  -s >> "$GITHUB_STEP_SUMMARY"
 
-        echo " --------- GITHUB_STEP_SUMMARY: $GITHUB_STEP_SUMMARY"
-
-        echo "This is the lead in sentence for the list" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY # this is a blank line
-        echo "- Lets add a bullet point" >> $GITHUB_STEP_SUMMARY
-        echo "- Lets add a second bullet point" >> $GITHUB_STEP_SUMMARY
-        echo "- How about a third one?" >> $GITHUB_STEP_SUMMARY
+        ./main/.ci/reporter.py ${{ inputs.archive }}/$LOG_SUFFIX/${{ inputs.id }}/$masterlogLoc/$fileroot.log \
+                                             -e ./${{ inputs.hpc-workflows_path }}/.ci/runner.py                             \
+                                             -o GITHUB -m # only mark fail steps with gh syntax
 
     - name: Generate list using Markdown
       run: |

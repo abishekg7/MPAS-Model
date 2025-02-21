@@ -52,7 +52,7 @@ def getSummaryPrintedStr( masterDict, metadata ) :
   outputHeadFormat = " TESTSUITE {name:<24} : {status:<24}   \n"
   outputTblFormat = "| {name:<24} | {status:<24} | {reason:<40} | \n"
   cmdFormat    = "{runner} {file} -t {test} {offset} -s LOCAL"
-  output = "SUMMARY OF TEST FAILURES\n" 
+  output = "SUMMARY OF TESTs and STEPs \n" 
   #output += outputFormat.format( name="NAME", status="STATUS", reason="REASON" )
   for test, testlog in masterDict.items() :
     output += "\n ----- \n "
@@ -64,10 +64,10 @@ def getSummaryPrintedStr( masterDict, metadata ) :
                                 offset="" if metadata["rel_offset"] == "" else "-d " + metadata["rel_offset"]
                                 )
     if testlog["success"]:
-      status_emoji = "PASSED :white_check_mark:"
+      status_emoji = " PASSED  :white_check_mark:"
       reason = " "
     else:
-      status_emoji = "FAILED :red_circle:"
+      status_emoji = " FAILED  :red_circle:"
       reason = testlog[ "line" ]
     output += outputHeadFormat.format( name=test, status=status_emoji)
     output += outputTblFormat.format( name="STEP", status="STATUS", reason="REASON" )
