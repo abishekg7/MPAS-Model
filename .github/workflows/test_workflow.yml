@@ -113,7 +113,7 @@ jobs:
         if [ "${{ inputs.mkdirs }}" = "true" ]; then
           masterlogLoc=main/$rel_dir
         fi
-        ./main/${{ inputs.hpc-workflows_path }}/.ci/reporter.py ${{ inputs.archive }}/$LOG_SUFFIX/${{ inputs.id }}/$masterlogLoc/$fileroot.log \
+        ./main/.ci/reporter.py ${{ inputs.archive }}/$LOG_SUFFIX/${{ inputs.id }}/$masterlogLoc/$fileroot.log \
                                              -e ./${{ inputs.hpc-workflows_path }}/.ci/runner.py                             \
                                              -o GITHUB -m # only mark fail steps with gh syntax
         
@@ -121,10 +121,15 @@ jobs:
         
         echo "# Summary for ${{ join( fromJson( inputs.tests ), ' ' ) }}" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-        ./main/${{ inputs.hpc-workflows_path }}/.ci/reporter.py ${{ inputs.archive }}/$LOG_SUFFIX/${{ inputs.id }}/$masterlogLoc/$fileroot.log \
+        ./main/.ci/reporter.py ${{ inputs.archive }}/$LOG_SUFFIX/${{ inputs.id }}/$masterlogLoc/$fileroot.log \
                                              -e ./${{ inputs.hpc-workflows_path }}/.ci/runner.py                                               \
                                              -s >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "#####################"
+        echo "######### GITHUB_STEP_SUMMARY ############"
+        echo $GITHUB_STEP_SUMMARY
+        echo "#####################"
+        echo "######### END GITHUB_STEP_SUMMARY ############"
 
     - name: Generate list using Markdown
       run: |
