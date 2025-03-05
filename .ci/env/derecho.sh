@@ -4,7 +4,7 @@ echo "Setting up derecho environment"
 workingDirectory=$PWD
 . /etc/profile.d/z00_modules.sh
 echo "Loading modules : $*"
-cmd="module purge"
+cmd="module --force purge"
 echo $cmd && eval "${cmd}"
 
 # We should be handed in the modules to load

@@ -1,0 +1,179 @@
+// MPAS Compilation tests
+{
+  "submit_options" :
+  {
+    // Default values
+    "timelimit" : "00:15:00",
+    "working_directory" : "..",
+    "arguments" :
+    {
+      "base_env_numprocs"      : [ "-e", "NUM_PROCS=4" ],
+
+      ".*make.*::args_build_core"     : [ "-c", "atmosphere" ],
+      ".*debug.*::args_build_debug"     : [ "-d" ],
+      ".*make.*double.*::args_build_precision"     : [ "-p" ],
+      //".*make.*gpu.*::args_build_options_0"     : [ "-g" ],
+      //".*make.*cpu.*::args_build_options"     : [ "-b", "-j $NUM_PROCS" ],
+      ".*make.*::args_build_options"     : [ "-b", "-j $NUM_PROCS"],
+      ".*gnu.*::args_target"     : [ "-t", "gnu" ],
+      ".*make.*nvhpc.*::args_target"     : [ "-t", "nvhpc" ],
+      ".*make.*nvhpc.*gpu.*::args_openacc"     : [ "-g" ],
+      ".*test_.*::args_namelist" : [ "-b", "atmosphere_model"],
+      ".*test_jw.*::args_namelist" : [ "-f", "/glade/campaign/mmm/wmr/mpas_ci/jw_baroclinic"],
+      ".*test_conus.*::args_namelist" : [ "-f", "/glade/campaign/mmm/wmr/mpas_ci/conus_lam"],
+      ".*test_.*cpu.*::args_namelist" :
+        [ 
+          "-p", "mpiexec -n $CI_NTASKS -ppn $CI_TASKS_PER_NODE"
+        ],
+      ".*test_.*gpu.*::args_namelist" :
+        [ 
+          "-p", "mpiexec -n $CI_NTASKS -ppn $CI_TASKS_PER_NODE set_gpu_rank "
+        ]
+    },
+    // Derecho-specifics
+    "hsn.de.hpc"  :
+    {
+      "submission" : "PBS",
+      "queue"      : "develop",
+      "-m" : "n",
+      "hpc_arguments"  : 
+      {
+        ".*make.*::node_select" : 
+        { 
+          "-l " : { "select"       : 1, "ncpus" : 64, "mpiprocs" : 16  }
+        },
+        ".*test_jw.*(refgen|restart).*cpu.*::node_select" : 
+        { 
+          "-l " : { "select"       : 1, "ncpus" : 1  }
+        },
+        ".*test_conus.*refgen.*cpu.*::node_select" : 
+        { 
+          "-l " : { "select"       : 1, "ncpus" : 64, "mpiprocs" : 1   }
+        },
+        ".*test_jw.*parallel.*cpu.*::node_select" :
+        {
+           "-l " : { "select"       : 1, "ncpus" : 16, "mpiprocs" : 4 } 
+        },
+        ".*test_jw.*perf.*cpu.*::node_select" :
+        {
+           "-l " : { "select"       : 1, "ncpus" : 16, "mpiprocs" : 4 }
+        },
+        ".*test_jw.*(refgen|restart).*gpu.*::node_select" :
+        {
+           "-l " : { "select": 1, "ncpus": 16, "mpiprocs":1, "ngpus":1 } 
+        },
+        ".*test_jw.*(multigpu|perf).*gpu.*::node_select" :
+        {
+           "-l " : { "select": 1, "ncpus": 16, "mpiprocs":2, "ngpus":2 } 
+        },
+        ".*test_conus.*(refgen|restart).*gpu.*::node_select" :
+        {
+           "-l " : { "select": 1, "ncpus": 16, "mpiprocs":2, "ngpus":2 } 
+        },
+        "priority"    : { "-l " : { "job_priority" : "economy"       } },
+        "mail_events" : { "-m " : { "n" : ""}}
+      },
+      "arguments"  : 
+      {
+        // We want NUM_PROCS to match ncpus
+        //"base_env_numprocs"      : [ "-e", "NUM_PROCS=16, LD_LIBRARY_PATH=/glade/u/apps/derecho/23.09/spack/opt/spack/parallel-netcdf/1.12.3/cray-mpich/8.1.27/gcc/12.2.0/sq5u/lib:/glade/u/apps/derecho/23.09/spack/opt/spack/netcdf/4.9.2/gcc/12.2.0/gjc6/lib:\\\\$LD_LIBRARY_PATH" ],
+        "base_env_numprocs"      : [ "-e", "NUM_PROCS=16" ],
+        "global_modules" : [ "ncarenv/23.09"],
+        ".*gnu.*::test_modules"   : [ "gcc/12.2.0","cray-mpich", "parallel-netcdf", "netcdf" ],
+        ".*nvhpc.*::test_modules"   : [ "nvhpc/24.3","cray-mpich","ncarcompilers", "parallel-netcdf", "cuda" ]
+        
+      }
+    }
+  },
+
+  "gnu" :
+    {
+      "submit_options" :
+      {
+        "arguments" :
+        {
+          // Remove auto-filled dir and supply sub-testcase specific ones
+          ".*test_.*::args_namelist_dir" : ["-e", "LD_LIBRARY_PATH=/glade/u/apps/derecho/23.09/spack/opt/spack/parallel-netcdf/1.12.3/cray-mpich/8.1.27/gcc/12.2.0/sq5u/lib:/glade/u/apps/derecho/23.09/spack/opt/spack/netcdf/4.9.2/gcc/12.2.0/gjc6/lib:\\\\$LD_LIBRARY_PATH"]
+        }
+      },
+      "steps" :
+      {
+        // "make-release" :
+        // {
+        //   "command"      : ".ci/tests/build.sh"
+        // },
+        // "test_jw-refgen-cpu" :
+        // {
+        //   "submit_options" : { "timelimit" : "00:15:00" },
+        //   "command"      : ".ci/tests/runTestCases.sh",
+        //   "arguments" : ["-d", "cpu", "-t", "gnu", "-c", "jw", "-g", "refgen"],
+        //   "dependencies" : { "make-release" : "afterok" }
+        // },
+        "test_conus-refgen-cpu" :
+        {
+          "submit_options" : { "timelimit" : "00:15:00" },
+          "command"      : ".ci/tests/runTestCases.sh",
+          "arguments" : ["-d", "gpu", "-t", "nvhpc", "-c", "conus", "-g", "refgen"]
+          //"dependencies" : { "make-release" : "afterok" }
+        }
+      }
+    },
+    "gnu-double" :
+    {
+      "submit_options" :
+      {
+        "arguments" :
+        {
+          ".*test_.*::args_namelist_dir" : ["-e", "LD_LIBRARY_PATH=/glade/u/apps/derecho/23.09/spack/opt/spack/parallel-netcdf/1.12.3/cray-mpich/8.1.27/gcc/12.2.0/sq5u/lib:/glade/u/apps/derecho/23.09/spack/opt/spack/netcdf/4.9.2/gcc/12.2.0/gjc6/lib:\\\\$LD_LIBRARY_PATH" ]
+        }
+      },
+      "steps" :
+      {
+        "make-release-double" :
+        {
+          "command"      : ".ci/tests/build.sh"
+        },
+        "test_jw-refgen-cpu" :
+        {
+          "submit_options" : { "timelimit" : "00:15:00" },
+          "command"      : ".ci/tests/runTestCases.sh",
+          "arguments" : ["-d", "cpu", "-t", "gnu", "-c", "jw", "-g", "refgen", "-n"],
+          "dependencies" : { "make-release-double" : "afterok" }
+        }
+      }
+    },
+    "nvhpc-cpu" :
+    {
+      "steps" :
+      {      
+        "make-nvhpc-release-cpu" :
+        {
+        "command"      : ".ci/tests/build.sh"
+        },
+        "test_jw-nvhpc-refgen-cpu" :
+        {
+         "submit_options" : { "timelimit" : "00:15:00" },
+         "command"      : ".ci/tests/runTestCases.sh",
+         "arguments" : ["-d", "cpu", "-t", "nvhpc", "-c", "jw", "-g", "refgen"],
+         "dependencies" : { "make-nvhpc-release-cpu" : "afterok" }
+        }
+      }
+    },
+    "nvhpc-gpu" :
+    {
+      "steps" :
+      {
+         "make-nvhpc-release-gpu" :
+         {
+           "command"      : ".ci/tests/build.sh"
+         },
+        "test_jw-nvhpc-refgen-gpu" :
+        {
+          "submit_options" : { "timelimit" : "00:15:00" },
+          "command"      : ".ci/tests/runTestCases.sh",
+          "arguments" : ["-d", "gpu", "-t", "nvhpc", "-c", "jw", "-g", "refgen"],
+          "dependencies" : { "make-nvhpc-release-gpu" : "afterok" }
+        }
+      }
+    }
+  }
