@@ -10,7 +10,7 @@ help()
   echo "  -r <folder>               Directory to run in using mkdir and symlinking -c <folder> for each namelist"
   echo "  -b <exec>                 Binary executable for MPAS"
   echo "  -f <folder>               Directory to look for input files in"
-  echo "  -n <namelists>            Namelists to use"
+  echo "  -n                        Use double precision"
   echo "  -d <device>               Device to use"
   echo "  -q <interval>             Restart interval"
   echo "  -y <time>                 Restart time"
@@ -33,7 +33,7 @@ help()
 
 cwd=$(dirname "$0")
 
-source $cwd/utils.sh
+. $cwd/utils.sh
 
 echo "Input arguments:"
 echo "$*"
@@ -49,13 +49,15 @@ fi
 workingDirectory=$1
 shift
 
-cd $workingDirectory
+cd $workingDirectory || exit
 
+# default precision is single
+precision="single"
 
 # Get some helper functions
 . .ci/env/helpers.sh
 
-while getopts c:g:r:b:f:n:d:q:y:z:w:p:t:k:s:i:e:h opt; do
+while getopts c:g:r:b:f:d:q:y:z:w:p:t:k:s:i:e:nh opt; do
   case $opt in
     c)
       testcase="$OPTARG"
@@ -73,7 +75,7 @@ while getopts c:g:r:b:f:n:d:q:y:z:w:p:t:k:s:i:e:h opt; do
       caseInputDir="$OPTARG"
     ;;
     n)
-      namelists="$OPTARG"
+      precision="double"
     ;;
     d)
       device="$OPTARG"
@@ -99,12 +101,6 @@ while getopts c:g:r:b:f:n:d:q:y:z:w:p:t:k:s:i:e:h opt; do
     k)
       diffExec="$OPTARG"
     ;;
-    s)
-      moveFolder="$OPTARG"
-    ;;
-    i)
-      identicalFolder="$OPTARG"
-    ;;
     e)
       envVars="$envVars,$OPTARG"
     ;;
@@ -127,22 +123,22 @@ fi
 
 
 # Check if testcase is valid
-if [[ "$testcase" != "jw" && "$testcase" != "conus" && "$testcase" != "aquaplanet" ]]; then
+if [ "$testcase" != "jw" ] && [ "$testcase" != "conus" ] && [ "$testcase" != "aquaplanet" ]; then
   echo "Error: Invalid testcase '$testcase'. Must be one of 'jw', 'conus', or 'aquaplanet'."
   exit 1
 fi
 
 
 # Check if testType is valid
-if [[ "$testType" != "base" && "$testType" != "restart" && "$testType" != "mpi" && "$testType" != "multigpu" && "$testType" != "omp" && "$testType" != "perf" ]]; then
+if [ "$testType" != "base" ] && [ "$testType" != "refgen" ] && [ "$testType" != "restart" ] && [ "$testType" != "mpi" ] && [ "$testType" != "multigpu" ] && [ "$testType" != "omp" ] && [ "$testType" != "perf" ]; then
   echo "Error: Invalid testType '$testType'. Must be one of 'base', 'restart', 'mpi', or 'omp'."
   exit 1
 fi
-runDir=${testcase}_${target}_${testType}_${device}
+runDir=${testcase}_${target}_${testType}_${device}_${precision}
 
-baserunDir=${testcase}_${target}_base_${device}
+baserunDir=${testcase}_${target}_base_${device}_${precision}
 
-TESTNAME="${testcase} ${target} ${testType} ${device}"
+TESTNAME="${testcase} ${target} ${testType} ${device} ${precision}"
 echo "TEST : $TESTNAME"
 
 # from https://ncar-hpc-docs.readthedocs.io/en/latest/pbs/job-scripts/#derecho
@@ -158,10 +154,7 @@ log_file="log.atmosphere.0000.out"
 # Re-evaluate input values for delayed expansion
 eval "rootDir=\$( realpath \"$rootDir\" )"
 eval "caseInputDir=\$( realpath \"$caseInputDir\" )"
-eval "namelists=\"$namelists\""
-#eval "data=\$( realpath \"$data\" )"
 eval "parallelExec=\"$parallelExec\""
-
 eval "runDir=\"$runDir\""
 eval "baserunDir=\"$baserunDir\""
 
@@ -177,31 +170,27 @@ ln -sf $workingDirectory/$mpasExecutable $runDir/$mpasExecutable
 eval "mpasExecutable=\$( realpath \"$runDir/$mpasExecutable\" )"
 
 echo "mpas executable: $mpasExecutable"
-#wrf=$( realpath $( find $runDir -type f -name wrf -o -name wrf.exe | head -n 1 ) )
-#rd_12_norm=$( realpath .ci/tests/SCRIPTS/rd_l2_norm.py )
 
 # Check our paths
 if [ ! -x "${mpasExecutable}" ]; then
-  echo "No mpas executable found"
-  exit 1
+    echo "No mpas executable found"
+    exit 1
 fi
 
 if [ ! -d "${caseInputDir}" ]; then
-  echo "No valid Case Input Directory provided"
-  exit 1
+    echo "No valid Case Input Directory provided"
+    exit 1
 fi
-
-
 
 ################################################################################
 #
 # Things done only once
 # Go to core dir to make sure it exists
-#cd $rootDir || exit $?
 cd $workingDirectory || exit $?
 
 #eval "repo_id=\$( git describe --abbrev=20 )"
 eval "repo_id=\$( git rev-parse --short=20 HEAD )"  # github actions doesn't fetch tags yet
+eval "repo_id_short=\$( git rev-parse --short=10 HEAD )"  # github actions doesn't fetch tags yet
 eval "repo_timestamp=\$( git show --no-patch --format=%ci )"
 
 # Clean up previous runs
@@ -232,16 +221,16 @@ if [ -n "$outputInterval" ]; then
   stream_replace "output" "output_interval" "$outputInterval" streams.atmosphere
 fi
 
-if [[ "$testType" == "restart" ]]; then
-  nml_replace "config_do_restart" "true" namelist.atmosphere
-  nml_replace_quotes "config_run_duration" "$runDuration" namelist.atmosphere
-  nml_replace_quotes "config_start_time" "$restartTime" namelist.atmosphere
-  if [ -n "$restartTime" ]; then
-      restartTime_modified=$(echo "$restartTime" | tr ':' '.')
-      echo "trying to link $baserunDir/restart.$restartTime_modified.nc"
-      ln -sf $baserunDir/restart.$restartTime_modified.nc .
-      #ln -sf $workingDirectory/test_base/restart.$restartTime.nc $workingDirectory/$runDir/restart.$restartTime.nc
-  fi  
+if [ "$testType" = "restart" ]; then
+    nml_replace "config_do_restart" "true" namelist.atmosphere
+    nml_replace_quotes "config_run_duration" "$runDuration" namelist.atmosphere
+    nml_replace_quotes "config_start_time" "$restartTime" namelist.atmosphere
+    if [ -n "$restartTime" ]; then
+        restartTime_modified=$(echo "$restartTime" | tr ':' '.')
+        echo "trying to link $baserunDir/restart.$restartTime_modified.nc"
+        ln -sf $baserunDir/restart.$restartTime_modified.nc .
+        #ln -sf $workingDirectory/test_base/restart.$restartTime.nc $workingDirectory/$runDir/restart.$restartTime.nc
+    fi  
 fi
 
 if [ -n "$restartInterval" ]; then
@@ -249,7 +238,7 @@ if [ -n "$restartInterval" ]; then
   stream_replace "restart" "output_interval" "$restartInterval" streams.atmosphere
 fi
 
-if [[ "$testType" == "perf" ]]; then
+if [ "$testType" = "perf" ]; then
   nml_replace_quotes "config_run_duration" "$runDuration" namelist.atmosphere
   stream_replace "restart" "output_interval" "none" streams.atmosphere
   stream_replace "output" "output_interval" "none" streams.atmosphere
@@ -257,12 +246,12 @@ fi
 
 
 # Link in data in here
-if [[ "$testcase" == "jw" ]]; then
+if [ "$testcase" = "jw" ]; then
     grid_file="x1.40962.grid.nc"
     init_file="x1.40962.init.nc"
     part_prefix="x1.40962.graph.info.part."
     restart_compare_time='0000-01-01_02.00.00'
-elif  [[ "$testcase" == "conus" ]]; then
+elif [ "$testcase" = "conus" ]; then
     init_file="conus.init.nc"
     part_prefix="conus.graph.info.part."
     lbc_prefix='lbc.'
@@ -319,40 +308,52 @@ fi
 
   
 
-if [[ "$testType" != "perf" ]]; then
-  diff_output $runDir/restart.${restart_compare_time}.nc $baserunDir/restart.${restart_compare_time}.nc
-  result=$?
+if [ "$testType" = "restart" ] || [ "$testType" = "mpi" ] || [ "$testType" = "multigpu" ] || [ "$testType" = "omp" ]; then
 
-  cd $workingDirectory
-  #rm -rf test_$testType
+    diff_output $runDir/restart.${restart_compare_time}.nc $baserunDir/restart.${restart_compare_time}.nc
+    result=$?
 
+elif [ "$testType" = "base" ]; then
+
+    head_sha=$( cat $caseInputDir/reference/head_${target}_${device}_${precision} ) || exit $?
+    echo "Comparing base with reference SHA: $head_sha"
+    echo "Restart file: $caseInputDir/reference/restart.${restart_compare_time}_${head_sha}_${target}_${device}.nc"
+    diff_output $runDir/restart.${restart_compare_time}.nc "$caseInputDir/reference/restart.${restart_compare_time}_${head_sha}_${target}_${device}_${precision}.nc"
+    result=$?
+
+elif [ "$testType" = "refgen" ]; then
   
-else
+    mv "$runDir/restart.${restart_compare_time}.nc" "$caseInputDir/reference/restart.${restart_compare_time}_${repo_id_short}_${target}_${device}_${precision}.nc" || exit $?
+    
+    echo "${repo_id_short}" > $caseInputDir/reference/head_${target}_${device}_${precision} || exit $?
 
-log_file_path=$runDir/$log_file
+elif [ "$testType" = "perf" ]; then
 
-#eval "totaltime_1=\$( sed -n '/timer_name/,/-------/p'  $log_file_path | awk '{print \$4}' | head -2 | tail -1 )"
-extract_totaltime $log_file_path
-totaltime_1=$totaltime
-echo "Total time: $totaltime_1"
+    log_file_path=$runDir/$log_file
 
-# If the testType is perf, run the code two more times and calculate the average time
+    #eval "totaltime_1=\$( sed -n '/timer_name/,/-------/p'  $log_file_path | awk '{print \$4}' | head -2 | tail -1 )"
+    extract_totaltime $log_file_path
+    result=$?
+    totaltime_1=$totaltime
+    echo "Total time: $totaltime_1"
 
-for i in {2..5}; do
-  eval "$parallelExec $mpasExecutable"
-  extract_totaltime $log_file_path
-  eval "totaltime_$i=$totaltime"
-  #echo "Total time: $totaltime_$i"
-  eval "echo "Total time: \$totaltime_$i""
-done
+    # If the testType is perf, run the code four more times
 
-db_file="/glade/campaign/mmm/wmr/mpas_ci/test2.db"
+    for i in {2..5}; do
+      eval "$parallelExec $mpasExecutable"
+      extract_totaltime $log_file_path
+      eval "totaltime_$i=$totaltime"
+      #echo "Total time: $totaltime_$i"
+      eval "echo "Total time: \$totaltime_$i""
+    done
 
-machine="derecho"
+    db_file="/glade/campaign/mmm/wmr/mpas_ci/test2.db"
 
-eval "python $workingDirectory/.ci/tests/perf_stats.py $db_file $testcase $machine $device $target $repo_id $totaltime_1,$totaltime_2,$totaltime_3,$totaltime_4,$totaltime_5"
-result=$?
-#eval "python $workingDirectory/.ci/tests/query_perf_db.py compare_to_ref $db_file $testcase $machine $device $target $totaltime_1,$totaltime_2,$totaltime_3,$totaltime_4,$totaltime_5"
+    machine="derecho"
+
+    eval "python $workingDirectory/.ci/tests/perf_stats.py $db_file $testcase $machine $device $target $repo_id $totaltime_1,$totaltime_2,$totaltime_3,$totaltime_4,$totaltime_5"
+    result=$?
+    #eval "python $workingDirectory/.ci/tests/query_perf_db.py compare_to_ref $db_file $testcase $machine $device $target $totaltime_1,$totaltime_2,$totaltime_3,$totaltime_4,$totaltime_5"
 
 fi
 
