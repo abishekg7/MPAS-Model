@@ -17,7 +17,7 @@ help()
   echo "  -z <duration>             Run duration"
   echo "  -w <interval>             Output interval"
   echo "  -p <mpirun cmd>           Parallel launch command (MPI), e.g. mpirun, mpiexec_mpt, mpiexec -np 8 --oversubscribe"
-  echo "  -t <target>               Target for the test"
+  echo "  -t <toolchain>               toolchain for the test"
   echo "  -k <diff exec>            Diff executable"
   echo "  -s <folder>               Save result data to prefix location, full path for run constructed as <work>/<thisfolder>/<namelist>/"
   echo "  -i <folder>               Folder for bitwise-identical results, full path for run constructed as <work>/<thisfolder>/<namelist>/"
@@ -96,7 +96,7 @@ while getopts c:g:r:b:f:d:q:y:z:w:p:t:k:s:i:e:nh opt; do
       parallelExec="$OPTARG"
     ;;
     t)
-      target="$OPTARG"
+      toolchain="$OPTARG"
     ;;
     k)
       diffExec="$OPTARG"
@@ -121,24 +121,39 @@ if [ ! -z $envVars ]; then
   setenvStr "$envVars"
 fi
 
-
 # Check if testcase is valid
 if [ "$testcase" != "jw" ] && [ "$testcase" != "conus" ] && [ "$testcase" != "aquaplanet" ]; then
-  echo "Error: Invalid testcase '$testcase'. Must be one of 'jw', 'conus', or 'aquaplanet'."
-  exit 1
+    echo "Error: Invalid testcase '$testcase'. Must be one of 'jw', 'conus', or 'aquaplanet'."
+    exit 1
 fi
-
 
 # Check if testType is valid
-if [ "$testType" != "base" ] && [ "$testType" != "refgen" ] && [ "$testType" != "restart" ] && [ "$testType" != "mpi" ] && [ "$testType" != "multigpu" ] && [ "$testType" != "omp" ] && [ "$testType" != "perf" ]; then
-  echo "Error: Invalid testType '$testType'. Must be one of 'base', 'restart', 'mpi', or 'omp'."
-  exit 1
+if [ "$testType" != "base" ] && [ "$testType" != "refgen" ] && 
+   [ "$testType" != "restart" ] && [ "$testType" != "mpi" ] && [ "$testType" != "multinode" ] &&
+   [ "$testType" != "multigpu" ] && [ "$testType" != "omp" ] &&
+   [ "$testType" != "perfgen" ] && [ "$testType" != "perfcmp" ]; then  
+    echo "Error: Invalid testType '$testType'. Must be one of 'base', 'refgen', 'restart', 'mpi', 'multigpu', 'omp', 'perfgen', or 'perfcmp'."
+    exit 1
 fi
-runDir=${testcase}_${target}_${testType}_${device}_${precision}
 
-baserunDir=${testcase}_${target}_base_${device}_${precision}
+# Check if toolchain is valid
+if [ "$toolchain" != "gnu" ] && [ "$toolchain" != "nvhpc" ] && [ "$toolchain" != "intel" ]; then
+    echo "Error: Invalid toolchain '$toolchain'. Must be one of 'gnu', 'nvhpc', or 'intel'."
+    exit 1
+fi
 
-TESTNAME="${testcase} ${target} ${testType} ${device} ${precision}"
+# Check if device is valid
+if [ "$device" != "cpu" ] && [ "$device" != "gpu" ]; then
+    echo "Error: Invalid device '$device'. Must be one of 'cpu' or 'gpu'."
+    exit 1
+fi
+
+
+runDir=${testcase}_${toolchain}_${testType}_${device}_${precision}
+
+baserunDir=${testcase}_${toolchain}_base_${device}_${precision}
+
+TESTNAME="${testcase} ${toolchain} ${testType} ${device} ${precision}"
 echo "TEST : $TESTNAME"
 
 # from https://ncar-hpc-docs.readthedocs.io/en/latest/pbs/job-scripts/#derecho
@@ -193,19 +208,14 @@ eval "repo_id=\$( git rev-parse --short=20 HEAD )"  # github actions doesn't fet
 eval "repo_id_short=\$( git rev-parse --short=10 HEAD )"  # github actions doesn't fetch tags yet
 eval "repo_timestamp=\$( git show --no-patch --format=%ci )"
 
-# Clean up previous runs
-# rm wrfinput_d* wrfbdy_d* wrfout_d* wrfchemi_d* wrf_chem_input_d* rsl* real.print.out* wrf.print.out* wrf_d0*_runstats.out qr_acr_qg_V4.dat fort.98 fort.88 -rf
-
-
 # Go to run location now - We only operate here from now on
 cd $runDir || exit $?
-# Clean up previous runs
-# rm wrfinput_d* wrfbdy_d* wrfout_d* wrfchemi_d* wrf_chem_input_d* rsl* real.print.out* wrf.print.out* wrf_d0*_runstats.out qr_acr_qg_V4.dat fort.98 fort.88 -rf
+# TODO: Clean up previous runs
 
 
 # Copy namelist
 echo "Setting $caseInputDir/namelist.atmosphere  as namelist.atmosphere "
-# remove old namelist.input which may be a symlink in which case this would have failed
+# TODO: remove old namelist.input which may be a symlink in which case this would have failed
 #rm namelist.input
 cp $caseInputDir/namelist.atmosphere namelist.atmosphere || exit $?
 cp $caseInputDir/streams.atmosphere streams.atmosphere || exit $?
@@ -220,6 +230,7 @@ fi
 if [ -n "$outputInterval" ]; then
   stream_replace "output" "output_interval" "$outputInterval" streams.atmosphere
 fi
+
 
 if [ "$testType" = "restart" ]; then
     nml_replace "config_do_restart" "true" namelist.atmosphere
@@ -315,19 +326,19 @@ if [ "$testType" = "restart" ] || [ "$testType" = "mpi" ] || [ "$testType" = "mu
 
 elif [ "$testType" = "base" ]; then
 
-    head_sha=$( cat $caseInputDir/reference/head_${target}_${device}_${precision} ) || exit $?
+    head_sha=$( cat $caseInputDir/reference/head_${toolchain}_${device}_${precision} ) || exit $?
     echo "Comparing base with reference SHA: $head_sha"
-    echo "Restart file: $caseInputDir/reference/restart.${restart_compare_time}_${head_sha}_${target}_${device}.nc"
-    diff_output $runDir/restart.${restart_compare_time}.nc "$caseInputDir/reference/restart.${restart_compare_time}_${head_sha}_${target}_${device}_${precision}.nc"
+    echo "Restart file: $caseInputDir/reference/restart.${restart_compare_time}_${head_sha}_${toolchain}_${device}.nc"
+    diff_output $runDir/restart.${restart_compare_time}.nc "$caseInputDir/reference/restart.${restart_compare_time}_${head_sha}_${toolchain}_${device}_${precision}.nc"
     result=$?
 
 elif [ "$testType" = "refgen" ]; then
   
-    mv "$runDir/restart.${restart_compare_time}.nc" "$caseInputDir/reference/restart.${restart_compare_time}_${repo_id_short}_${target}_${device}_${precision}.nc" || exit $?
+    mv "$runDir/restart.${restart_compare_time}.nc" "$caseInputDir/reference/restart.${restart_compare_time}_${repo_id_short}_${toolchain}_${device}_${precision}.nc" || exit $?
     
-    echo "${repo_id_short}" > $caseInputDir/reference/head_${target}_${device}_${precision} || exit $?
+    echo "${repo_id_short}" > $caseInputDir/reference/head_${toolchain}_${device}_${precision} || exit $?
 
-elif [ "$testType" = "perf" ]; then
+elif [ "$testType" = "perfgen" ] || [ "$testType" = "perfcmp" ]; then
 
     log_file_path=$runDir/$log_file
 
@@ -351,9 +362,12 @@ elif [ "$testType" = "perf" ]; then
 
     machine="derecho"
 
-    eval "python $workingDirectory/.ci/tests/perf_stats.py $db_file $testcase $machine $device $target $repo_id $totaltime_1,$totaltime_2,$totaltime_3,$totaltime_4,$totaltime_5"
+    if [ "$testType" = "perfgen" ]; then
+        eval "python $workingDirectory/.ci/tests/perf_stats.py $db_file $testcase $machine $device $toolchain $repo_id $totaltime_1,$totaltime_2,$totaltime_3,$totaltime_4,$totaltime_5"
+    elif [ "$testType" = "perfcmp" ]; then
+        eval "python $workingDirectory/.ci/tests/query_perf_db.py compare_to_ref $db_file $testcase $machine $device $toolchain $totaltime_1,$totaltime_2,$totaltime_3,$totaltime_4,$totaltime_5"
+    fi
     result=$?
-    #eval "python $workingDirectory/.ci/tests/query_perf_db.py compare_to_ref $db_file $testcase $machine $device $target $totaltime_1,$totaltime_2,$totaltime_3,$totaltime_4,$totaltime_5"
 
 fi
 
@@ -365,6 +379,10 @@ else
     echo "TEST $TESTNAME FAIL"
     exit 1
 fi
+
+
+
+
 #if [ -z "$errorMsg" ]; then
 # Unlink everything we linked in
 #ls $data/ | xargs -I{} rm {}
