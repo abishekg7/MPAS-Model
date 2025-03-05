@@ -8,6 +8,8 @@ help()
   echo "  -c                        Core to build"
   echo "  -t                        Target configuration (gnu, intel, etc)"
   echo "  -d                        Debug build"
+  echo "  -g                        OPENACC build"
+  echo "  -p                        precision build"
   echo "  -e                        environment variables in comma-delimited list, e.g. var=1,foo,bar=0"
   echo "  -- <hostenv.sh options>   Directly pass options to hostenv.sh, equivalent to hostenv.sh <options>"
   echo "  -h                  Print this message"
@@ -34,7 +36,7 @@ cd $workingDirectory
 # Get some helper functions, AS_HOST must be set by this point to work
 . .ci/env/helpers.sh
 
-while getopts b:c:t:dge:h opt; do
+while getopts b:c:t:dgpe:h opt; do
   case $opt in
     b)
       buildCommand="$OPTARG"
@@ -53,6 +55,9 @@ while getopts b:c:t:dge:h opt; do
     ;;
     g)
       openacc="OPENACC=true"
+    ;;
+    p)
+      precision="PRECISION=double"
     ;;
     h)  help; exit 0 ;;
     *)  help; exit 1 ;;
@@ -80,9 +85,9 @@ eval "buildCommand=\"$buildCommand\""
 
 make clean CORE=$core
 
-echo "Compiling with options $target core=$core $debug $buildCommand"
-echo "make $target CORE=$core $debug $buildCommand"
-make $target CORE=$core $openacc $debug $buildCommand
+echo "Compiling with options $target core=$core $debug $openacc $precision $buildCommand"
+echo "make $target CORE=$core $debug $openacc $precision $buildCommand"
+make $target CORE=$core $openacc $precision $debug $buildCommand
 result=$?
 
 if [ $result -ne 0 ]; then
