@@ -48,7 +48,7 @@
         },
         ".*test_conus.*refgen.*cpu.*::node_select" : 
         { 
-          "-l " : { "select"       : 1, "ncpus" : 64, "mpiprocs" : 4   }
+          "-l " : { "select"       : 1, "ncpus" : 64, "mpiprocs" : 1   }
         },
         ".*test_jw.*parallel.*cpu.*::node_select" :
         {
