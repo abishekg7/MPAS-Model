@@ -147,10 +147,10 @@ nvhpc:   # BUILDTARGET NVIDIA HPC SDK
 	"CC_SERIAL = nvc" \
 	"CXX_SERIAL = nvc++" \
 	"FFLAGS_PROMOTION = -r8" \
-	"FFLAGS_OPT = -gopt -O4 -byteswapio -Mfree" \
+	"FFLAGS_OPT = -gopt -O4 -byteswapio -Mfree -Mnosave -Mrecursive -Mstack_arrays -DMPAS_NVTX_RANGES" \
 	"CFLAGS_OPT = -gopt -O3" \
 	"CXXFLAGS_OPT = -gopt -O3" \
-	"LDFLAGS_OPT = -gopt -O3" \
+	"LDFLAGS_OPT = -gopt -O3 -lnvhpcwrapnvtx" \
 	"FFLAGS_DEBUG = -O0 -g -Mbounds -Mchkptr -byteswapio -Mfree -Ktrap=divz,fp,inv,ovf -traceback" \
 	"CFLAGS_DEBUG = -O0 -g -traceback" \
 	"CXXFLAGS_DEBUG = -O0 -g -traceback" \
@@ -158,6 +158,8 @@ nvhpc:   # BUILDTARGET NVIDIA HPC SDK
 	"FFLAGS_OMP = -mp" \
 	"CFLAGS_OMP = -mp" \
 	"FFLAGS_ACC = -Mnofma -acc -gpu=cc70,cc80 -Minfo=accel" \
+	"FFLAGS_NVHPC_ACC_BFB = -Mnofma -gpu=math_uniform" \
+	"FFLAGS_NVHPC_BFB = -Mnofma" \
 	"CFLAGS_ACC =" \
 	"PICFLAG = -fpic" \
 	"BUILD_TARGET = $(@)" \
@@ -849,6 +851,14 @@ ifeq "$(OPENACC)" "true"
         override CPPFLAGS += "-DMPAS_OPENACC"
         LDFLAGS += $(FFLAGS_ACC)
 endif #OPENACC IF
+
+ifeq "$(NVHPC_BFB)" "true"
+        ifeq "$(OPENACC)" "true"
+		FFLAGS += ${FFLAGS_NVHPC_ACC_BFB}
+        else
+		FFLAGS += ${FFLAGS_NVHPC_BFB}
+        endif
+endif #NVHPC IF
 
 ifeq "$(OPENMP_OFFLOAD)" "true"
 	FFLAGS += $(FFLAGS_GPU)
