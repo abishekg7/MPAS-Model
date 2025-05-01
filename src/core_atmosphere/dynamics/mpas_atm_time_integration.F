@@ -20,6 +20,11 @@ module atm_time_integration
    use mpas_pool_routines
    use mpas_kind_types
    use mpas_constants
+   !USE m_ser, ONLY: ser_init, ser_array
+   USE m_serialize, ONLY: fs_add_savepoint_metainfo, fs_read_field, fs_create_savepoint, fs_write_field
+   USE utils_ppser, ONLY: ppser_set_mode, ppser_initialize, ppser_get_mode, ppser_savepoint, &
+       ppser_serializer, ppser_serializer_ref, ppser_intlength, ppser_reallength, &
+       ppser_realtype, ppser_zrperturb
    use mpas_dmpar
    use mpas_vector_reconstruction
    ! Added only clause to keep xlf90 from getting confused from the overloaded abs intrinsic in mpas_timekeeping
@@ -198,6 +203,9 @@ module atm_time_integration
 
 #ifdef MPAS_OPENACC
       type (mpas_pool_type), pointer :: mesh
+      type (mpas_pool_type), pointer :: state
+      type (mpas_pool_type), pointer :: diag
+      type (mpas_pool_type), pointer :: tend_physics
 
       real (kind=RKIND), dimension(:), pointer :: dvEdge
       integer, dimension(:,:), pointer :: cellsOnCell
@@ -254,6 +262,29 @@ module atm_time_integration
       real (kind=RKIND), dimension(:), pointer :: latCell
       real (kind=RKIND), dimension(:), pointer :: lonCell
       real (kind=RKIND), dimension(:,:,:), pointer :: coeffs_reconstruct
+      real (kind=RKIND), dimension(:,:), pointer :: ru
+      real (kind=RKIND), dimension(:,:), pointer :: ru_save
+      real (kind=RKIND), dimension(:,:), pointer :: rw
+      real (kind=RKIND), dimension(:,:), pointer :: rw_save
+      real (kind=RKIND), dimension(:,:), pointer :: rtheta_p
+      real (kind=RKIND), dimension(:,:), pointer :: rtheta_p_save
+      real (kind=RKIND), dimension(:,:), pointer :: rho_p
+      real (kind=RKIND), dimension(:,:), pointer :: rho_p_save
+      real (kind=RKIND), dimension(:,:), pointer :: rho_zz_old_split
+
+      real (kind=RKIND), dimension(:,:), pointer :: u_1, u_2
+      real (kind=RKIND), dimension(:,:), pointer :: w_1, w_2
+      real (kind=RKIND), dimension(:,:), pointer :: theta_m_1, theta_m_2
+      real (kind=RKIND), dimension(:,:), pointer :: rho_zz_1, rho_zz_2
+      real (kind=RKIND), dimension(:,:,:), pointer :: scalars_1, scalars_2
+      real (kind=RKIND), dimension(:,:), pointer :: ruAvg, wwAvg, ruAvg_split, wwAvg_split
+
+      real (kind=RKIND), dimension(:,:), pointer :: rthdynten
+
+      real (kind=RKIND), dimension(:), pointer :: u_init, v_init, qv_init
+      real (kind=RKIND), dimension(:,:), pointer :: t_init
+
+
 #endif
 
 #ifdef MPAS_CAM_DYCORE
@@ -273,6 +304,12 @@ module atm_time_integration
 #ifdef MPAS_OPENACC
       nullify(mesh)
       call mpas_pool_get_subpool(domain % blocklist % structs, 'mesh', mesh)
+      nullify(tend_physics)
+      call mpas_pool_get_subpool(domain % blocklist % structs, 'tend_physics', tend_physics)
+
+      
+      call mpas_pool_get_subpool(domain % blocklist % structs, 'state', state)
+      call mpas_pool_get_subpool(domain % blocklist % structs, 'diag', diag)
 
       call mpas_pool_get_array(mesh, 'dvEdge', dvEdge)
       !$acc enter data copyin(dvEdge)
@@ -437,9 +474,579 @@ module atm_time_integration
 
       call mpas_pool_get_array(mesh, 'coeffs_reconstruct', coeffs_reconstruct)
       !$acc enter data copyin(coeffs_reconstruct)
+
+      call mpas_pool_get_array(mesh, 'u_init', u_init)
+      !$acc enter data copyin(u_init)
+      call mpas_pool_get_array(mesh, 'v_init', v_init)
+      !$acc enter data copyin(v_init)
+      call mpas_pool_get_array(mesh, 't_init', t_init)
+      !$acc enter data copyin(t_init)
+      call mpas_pool_get_array(mesh, 'qv_init', qv_init)
+      !$acc enter data copyin(qv_init)
+
+
+            ! Pointers for these are declared as module level variables
+      ! call mpas_pool_get_array(tend_physics, 'tend_rho_physics', tend_rho_physics)
+      ! !$acc enter data copyin(tend_rho_physics)
+      ! call mpas_pool_get_array(tend_physics, 'tend_ru_physics', tend_ru_physics)
+      ! !$acc enter data copyin(tend_ru_physics)
+      ! call mpas_pool_get_array(tend_physics, 'tend_rtheta_physics', tend_rtheta_physics)
+      ! !$acc enter data copyin(tend_rtheta_physics)
+      call mpas_pool_get_array(tend_physics, 'rthdynten', rthdynten)
+      !$acc enter data copyin(rthdynten)
+
 #endif
 
    end subroutine mpas_atm_dynamics_init
+
+   subroutine mpas_atm_pre_init(domain)
+
+      implicit none
+
+      type (domain_type), intent(inout) :: domain
+
+
+#ifdef MPAS_OPENACC
+      type (mpas_pool_type), pointer :: mesh
+
+      type (mpas_pool_type), pointer :: state
+      type (mpas_pool_type), pointer :: diag
+      type (mpas_pool_type), pointer :: tend
+      type (mpas_pool_type), pointer :: tend_physics
+      type (mpas_pool_type), pointer :: lbc
+
+
+      real (kind=RKIND), dimension(:), pointer :: dvEdge
+      integer, dimension(:,:), pointer :: cellsOnCell
+      integer, dimension(:,:), pointer :: cellsOnEdge
+      integer, dimension(:,:), pointer :: advCellsForEdge
+      integer, dimension(:,:), pointer :: edgesOnCell
+      integer, dimension(:), pointer :: nAdvCellsForEdge
+      integer, dimension(:), pointer :: nEdgesOnCell
+      real (kind=RKIND), dimension(:,:), pointer :: adv_coefs
+      real (kind=RKIND), dimension(:,:), pointer :: adv_coefs_3rd
+      real (kind=RKIND), dimension(:,:), pointer :: edgesOnCell_sign
+      real (kind=RKIND), dimension(:), pointer :: invAreaCell
+      integer, dimension(:), pointer :: bdyMaskCell
+      integer, dimension(:), pointer :: bdyMaskEdge
+      real (kind=RKIND), dimension(:), pointer :: specZoneMaskEdge
+      real (kind=RKIND), dimension(:), pointer :: invDvEdge
+      real (kind=RKIND), dimension(:), pointer :: dcEdge
+      real (kind=RKIND), dimension(:), pointer :: invDcEdge
+      integer, dimension(:,:), pointer :: edgesOnEdge
+      integer, dimension(:,:), pointer :: edgesOnVertex
+      real (kind=RKIND), dimension(:,:), pointer :: edgesOnVertex_sign
+      integer, dimension(:), pointer :: nEdgesOnEdge
+      real (kind=RKIND), dimension(:,:), pointer :: weightsOnEdge
+      integer, dimension(:,:), pointer :: cellsOnVertex
+      integer, dimension(:,:), pointer :: verticesOnCell
+      integer, dimension(:,:), pointer :: verticesOnEdge
+      real (kind=RKIND), dimension(:), pointer :: invAreaTriangle
+      integer, dimension(:,:), pointer :: kiteForCell
+      real (kind=RKIND), dimension(:,:), pointer :: kiteAreasOnVertex
+      real (kind=RKIND), dimension(:), pointer :: fEdge
+      real (kind=RKIND), dimension(:), pointer :: fVertex
+      real (kind=RKIND), dimension(:,:), pointer :: zz
+      real (kind=RKIND), dimension(:), pointer :: rdzw
+      real (kind=RKIND), dimension(:), pointer :: rdzu
+      real (kind=RKIND), dimension(:,:,:), pointer :: zb_cell
+      real (kind=RKIND), dimension(:,:,:), pointer :: zb3_cell
+      real (kind=RKIND), dimension(:), pointer :: fzm
+      real (kind=RKIND), dimension(:), pointer :: fzp
+      real (kind=RKIND), dimension(:,:,:), pointer :: zb
+      real (kind=RKIND), dimension(:,:,:), pointer :: zb3
+      integer, dimension(:), pointer :: nearestRelaxationCell
+      real (kind=RKIND), dimension(:,:), pointer :: zgrid
+      real (kind=RKIND), dimension(:,:), pointer :: zxu
+      real (kind=RKIND), dimension(:,:), pointer :: dss
+      real (kind=RKIND), dimension(:), pointer :: specZoneMaskCell
+      real (kind=RKIND), dimension(:,:), pointer :: defc_a
+      real (kind=RKIND), dimension(:,:), pointer :: defc_b
+      real (kind=RKIND), dimension(:), pointer :: latEdge
+      real (kind=RKIND), dimension(:), pointer :: angleEdge
+      real (kind=RKIND), dimension(:), pointer :: meshScalingDel2
+      real (kind=RKIND), dimension(:), pointer :: meshScalingDel4
+      real (kind=RKIND), dimension(:), pointer :: meshScalingRegionalCell
+      real (kind=RKIND), dimension(:), pointer :: meshScalingRegionalEdge
+      real (kind=RKIND), dimension(:), pointer :: latCell
+      real (kind=RKIND), dimension(:), pointer :: lonCell
+      real (kind=RKIND), dimension(:,:,:), pointer :: coeffs_reconstruct
+
+      real (kind=RKIND), dimension(:,:), pointer :: ru, ru_p
+      real (kind=RKIND), dimension(:,:), pointer :: ru_save
+      real (kind=RKIND), dimension(:,:), pointer :: rw, rw_p
+      real (kind=RKIND), dimension(:,:), pointer :: rw_save
+      real (kind=RKIND), dimension(:,:), pointer :: rtheta_p
+      real (kind=RKIND), dimension(:,:), pointer :: exner, exner_base
+      real (kind=RKIND), dimension(:,:), pointer :: rtheta_base, rho_base
+      real (kind=RKIND), dimension(:,:), pointer :: rtheta_p_save
+      real (kind=RKIND), dimension(:,:), pointer :: rho_p, rho_pp, rho, theta, theta_base
+      real (kind=RKIND), dimension(:,:), pointer :: rho_p_save
+      real (kind=RKIND), dimension(:,:), pointer :: rho_zz_old_split
+      real (kind=RKIND), dimension(:,:), pointer :: cqw, rtheta_pp_old, rtheta_pp
+      real (kind=RKIND), dimension(:,:), pointer :: cqu, pressure_base, pressure_p, pressure, v
+      real (kind=RKIND), dimension(:,:), pointer :: kdiff, pv_edge, pv_vertex, pv_cell, rho_edge, h_divergence, ke
+      real (kind=RKIND), dimension(:,:), pointer :: cofwr, cofwz, coftz, cofwt, a_tri, alpha_tri, gamma_tri
+      real (kind=RKIND), dimension(:), pointer :: cofrz
+
+
+      real (kind=RKIND), dimension(:,:), pointer :: u_1, u_2
+      real (kind=RKIND), dimension(:,:), pointer :: w_1, w_2
+      real (kind=RKIND), dimension(:,:), pointer :: theta_m_1, theta_m_2
+      real (kind=RKIND), dimension(:,:), pointer :: rho_zz_1, rho_zz_2
+      real (kind=RKIND), dimension(:,:,:), pointer :: scalars_1, scalars_2
+      real (kind=RKIND), dimension(:,:), pointer :: ruAvg, wwAvg, ruAvg_split, wwAvg_split
+
+      real (kind=RKIND), dimension(:,:), pointer :: tend_ru, tend_rt, tend_rho, tend_rw, rt_diabatic_tend
+      real (kind=RKIND), dimension(:,:), pointer :: tend_u_euler, tend_w_euler, tend_theta_euler
+      real(kind=RKIND), dimension(:,:), pointer :: tend_w_pgf, tend_w_buoy
+      real(kind=RKIND), dimension(:,:,:), pointer :: scalar_tend_save
+
+      real (kind=RKIND), dimension(:,:), pointer :: rthdynten, divergence, vorticity
+
+      real (kind=RKIND), dimension(:,:), pointer :: lbc_u, lbc_w, lbc_ru, lbc_rho_edge, lbc_rho, lbc_rtheta_m, lbc_rho_zz, lbc_theta
+      real (kind=RKIND), dimension(:,:), pointer :: lbc_tend_u, lbc_tend_w, lbc_tend_ru, lbc_tend_rho_edge, lbc_tend_rho
+      real (kind=RKIND), dimension(:,:), pointer :: lbc_tend_rtheta_m, lbc_tend_rho_zz, lbc_tend_theta
+
+      real (kind=RKIND), dimension(:,:,:), pointer :: lbc_scalars, lbc_tend_scalars
+
+      nullify(state)
+      nullify(diag)
+      nullify(mesh)
+      nullify(tend)
+      nullify(tend_physics)
+      nullify(lbc)
+      call mpas_pool_get_subpool(domain % blocklist % structs, 'mesh', mesh)
+      call mpas_pool_get_subpool(domain % blocklist % structs, 'state', state)
+      call mpas_pool_get_subpool(domain % blocklist % structs, 'diag', diag)
+      call mpas_pool_get_subpool(domain % blocklist % structs, 'tend', tend)
+      call mpas_pool_get_subpool(domain % blocklist % structs, 'tend_physics', tend_physics)
+      call mpas_pool_get_subpool(domain % blocklist % structs, 'lbc', lbc)
+
+      call mpas_pool_get_array(diag, 'ru', ru)
+      !$acc enter data copyin(ru) ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(diag, 'ru_p', ru_p)
+      !$acc enter data create(ru_p)
+      call mpas_pool_get_array(diag, 'ru_save', ru_save)
+      !$acc enter data create(ru_save)
+      call mpas_pool_get_array(diag, 'rw', rw)
+      !$acc enter data copyin(rw) ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(diag, 'rw_p', rw_p)
+      !$acc enter data create(rw_p)
+      call mpas_pool_get_array(diag, 'rw_save', rw_save)
+      !$acc enter data create(rw_save)
+      call mpas_pool_get_array(diag, 'rtheta_p', rtheta_p)
+      !$acc enter data copyin(rtheta_p) ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(diag, 'rtheta_p_save', rtheta_p_save)
+      !$acc enter data create(rtheta_p_save)
+      call mpas_pool_get_array(diag, 'exner', exner)
+      !$acc enter data copyin(exner) ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(diag, 'exner_base', exner_base)
+      !$acc enter data copyin(exner_base) ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(diag, 'rtheta_base', rtheta_base)
+      !$acc enter data copyin(rtheta_base) ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(diag, 'rho_base', rho_base)
+      !$acc enter data copyin(rho_base)
+      call mpas_pool_get_array(diag, 'rho', rho)
+      !$acc enter data copyin(rho)
+      call mpas_pool_get_array(diag, 'theta', theta)
+      !$acc enter data copyin(theta)
+      call mpas_pool_get_array(diag, 'theta_base', theta_base)
+      !$acc enter data copyin(theta_base)
+      call mpas_pool_get_array(diag, 'rho_p', rho_p)
+      !$acc enter data copyin(rho_p) ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(diag, 'rho_p_save', rho_p_save)
+      !$acc enter data create(rho_p_save)
+      call mpas_pool_get_array(diag, 'rho_pp', rho_pp)
+      !$acc enter data create(rho_pp)
+      call mpas_pool_get_array(diag, 'rho_zz_old_split', rho_zz_old_split)
+      !$acc enter data create(rho_zz_old_split)
+      call mpas_pool_get_array(diag, 'cqw', cqw)
+      !$acc enter data create(cqw)
+      call mpas_pool_get_array(diag, 'cqu', cqu)
+      !$acc enter data create(cqu)
+      call mpas_pool_get_array(diag, 'pressure_p', pressure_p)
+      !$acc enter data copyin(pressure_p) ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(diag, 'pressure_base', pressure_base)
+      !$acc enter data copyin(pressure_base) ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(diag, 'pressure', pressure)
+      !$acc enter data copyin(pressure)
+      call mpas_pool_get_array(diag, 'v', v)
+      !$acc enter data copyin(v) ! use values from atm_compute_solve_diagnostics
+      call mpas_pool_get_array(diag, 'rtheta_pp', rtheta_pp)
+      !$acc enter data create(rtheta_pp)
+      call mpas_pool_get_array(diag, 'rtheta_pp_old', rtheta_pp_old)
+      !$acc enter data create(rtheta_pp_old)
+      call mpas_pool_get_array(diag, 'kdiff', kdiff)
+      !$acc enter data copyin(kdiff)
+      call mpas_pool_get_array(diag, 'pv_edge', pv_edge)
+      !$acc enter data create(pv_edge) ! use values from atm_compute_solve_diagnostics
+      call mpas_pool_get_array(diag, 'pv_vertex', pv_vertex)
+      !$acc enter data create(pv_vertex) 
+      call mpas_pool_get_array(diag, 'pv_cell', pv_cell)
+      !$acc enter data create(pv_cell) 
+      call mpas_pool_get_array(diag, 'rho_edge', rho_edge)
+      !$acc enter data copyin(rho_edge) ! use values from atm_compute_solve_diagnostics
+      call mpas_pool_get_array(diag, 'h_divergence', h_divergence)
+      !$acc enter data copyin(h_divergence)
+      call mpas_pool_get_array(diag, 'ke', ke)
+      !$acc enter data copyin(ke) ! use values from atm_compute_solve_diagnostics
+
+      call mpas_pool_get_array(diag, 'alpha_tri', alpha_tri)
+      !$acc enter data create(alpha_tri)
+      call mpas_pool_get_array(diag, 'gamma_tri', gamma_tri)
+      !$acc enter data create(gamma_tri)
+      call mpas_pool_get_array(diag, 'a_tri', a_tri)
+      !$acc enter data create(a_tri)
+      call mpas_pool_get_array(diag, 'cofwr', cofwr)
+      !$acc enter data create(cofwr)
+      call mpas_pool_get_array(diag, 'cofwz', cofwz)
+      !$acc enter data create(cofwz)
+      call mpas_pool_get_array(diag, 'coftz', coftz)
+      !$acc enter data create(coftz)
+      call mpas_pool_get_array(diag, 'cofwt', cofwt)
+      !$acc enter data create(cofwt)
+      call mpas_pool_get_array(diag, 'cofrz', cofrz)
+      !$acc enter data create(cofrz)
+
+      call mpas_pool_get_array(diag, 'vorticity', vorticity)
+      !$acc enter data copyin(vorticity)
+
+      call mpas_pool_get_array(diag, 'divergence', divergence)
+      !$acc enter data copyin(divergence)
+
+
+
+      call mpas_pool_get_array(diag, 'ruAvg', ruAvg)
+      !$acc enter data create(ruAvg)
+      call mpas_pool_get_array(diag, 'ruAvg_split', ruAvg_split)
+      !$acc enter data copyin(ruAvg_split)
+      call mpas_pool_get_array(diag, 'wwAvg', wwAvg)
+      !$acc enter data create(wwAvg)
+      call mpas_pool_get_array(diag, 'wwAvg_split', wwAvg_split)
+      !$acc enter data copyin(wwAvg_split)
+
+      call mpas_pool_get_array(state, 'u', u_1, 1)
+      !$acc enter data copyin(u_1)
+      call mpas_pool_get_array(state, 'u', u_2, 2)
+      !$acc enter data create(u_2)
+      call mpas_pool_get_array(state, 'w', w_1, 1)
+      !$acc enter data copyin(w_1)
+      call mpas_pool_get_array(state, 'w', w_2, 2)
+      !$acc enter data create(w_2)
+      call mpas_pool_get_array(state, 'theta_m', theta_m_1, 1)  
+      !$acc enter data copyin(theta_m_1)   ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(state, 'theta_m', theta_m_2, 2)
+      !$acc enter data create(theta_m_2)
+      call mpas_pool_get_array(state, 'rho_zz', rho_zz_1, 1)
+      !$acc enter data copyin(rho_zz_1)
+      call mpas_pool_get_array(state, 'rho_zz', rho_zz_2, 2)
+      !$acc enter data create(rho_zz_2)
+      call mpas_pool_get_array(state, 'scalars', scalars_1, 1)
+      !$acc enter data copyin(scalars_1)
+      call mpas_pool_get_array(state, 'scalars', scalars_2, 2)
+      !$acc enter data create(scalars_2)
+
+
+      call mpas_pool_get_array(tend, 'u', tend_ru)
+      !$acc enter data copyin(tend_ru)
+      call mpas_pool_get_array(tend, 'rho_zz', tend_rho)
+      !$acc enter data create(tend_rho)
+      call mpas_pool_get_array(tend, 'theta_m', tend_rt)
+      !$acc enter data copyin(tend_rt)
+      call mpas_pool_get_array(tend, 'w', tend_rw)
+      !$acc enter data copyin(tend_rw)
+      call mpas_pool_get_array(tend, 'rt_diabatic_tend', rt_diabatic_tend)
+      !$acc enter data copyin(rt_diabatic_tend)
+      call mpas_pool_get_array(tend, 'u_euler', tend_u_euler)
+      !$acc enter data create(tend_u_euler)
+      call mpas_pool_get_array(tend, 'theta_euler', tend_theta_euler)
+      !$acc enter data create(tend_theta_euler)
+      call mpas_pool_get_array(tend, 'w_euler', tend_w_euler)
+      !$acc enter data create(tend_w_euler)
+      call mpas_pool_get_array(tend, 'w_pgf', tend_w_pgf)
+      !$acc enter data copyin(tend_w_pgf)
+      call mpas_pool_get_array(tend, 'w_buoy', tend_w_buoy)
+      !$acc enter data copyin(tend_w_buoy)
+      call mpas_pool_get_array(tend, 'scalars_tend', scalar_tend_save)
+      !$acc enter data create(scalar_tend_save)
+
+
+      call mpas_pool_get_array(lbc, 'lbc_u', lbc_u, 2)
+      !$acc enter data create(lbc_u)
+      call mpas_pool_get_array(lbc, 'lbc_w', lbc_w, 2)
+      !$acc enter data create(lbc_w)
+      call mpas_pool_get_array(lbc, 'lbc_ru', lbc_ru, 2)
+      !$acc enter data create(lbc_ru)
+      call mpas_pool_get_array(lbc, 'lbc_rho_edge', lbc_rho_edge, 2)
+      !$acc enter data create(lbc_rho_edge)
+      call mpas_pool_get_array(lbc, 'lbc_theta', lbc_theta, 2)
+      !$acc enter data create(lbc_theta)
+      call mpas_pool_get_array(lbc, 'lbc_rtheta_m', lbc_rtheta_m, 2)
+      !$acc enter data create(lbc_rtheta_m)
+      call mpas_pool_get_array(lbc, 'lbc_rho_zz', lbc_rho_zz, 2)
+      !$acc enter data create(lbc_rho_zz)
+      call mpas_pool_get_array(lbc, 'lbc_rho', lbc_rho, 2)
+      !$acc enter data create(lbc_rho)
+      call mpas_pool_get_array(lbc, 'lbc_scalars', lbc_scalars, 2)
+      !$acc enter data create(lbc_scalars)
+
+      
+      call mpas_pool_get_array(lbc, 'lbc_u', lbc_tend_u, 1)
+      !$acc enter data create(lbc_tend_u)
+      call mpas_pool_get_array(lbc, 'lbc_ru', lbc_tend_ru, 1)
+      !$acc enter data create(lbc_tend_ru)
+      call mpas_pool_get_array(lbc, 'lbc_rho_edge', lbc_tend_rho_edge, 1)
+      !$acc enter data create(lbc_tend_rho_edge)
+      call mpas_pool_get_array(lbc, 'lbc_w', lbc_tend_w, 1)
+      !$acc enter data create(lbc_tend_w)
+      call mpas_pool_get_array(lbc, 'lbc_theta', lbc_tend_theta, 1)
+      !$acc enter data create(lbc_tend_theta)
+      call mpas_pool_get_array(lbc, 'lbc_rtheta_m', lbc_tend_rtheta_m, 1)
+      !$acc enter data create(lbc_tend_rtheta_m)
+      call mpas_pool_get_array(lbc, 'lbc_rho_zz', lbc_tend_rho_zz, 1)
+      !$acc enter data create(lbc_tend_rho_zz)
+      call mpas_pool_get_array(lbc, 'lbc_rho', lbc_tend_rho, 1)
+      !$acc enter data create(lbc_tend_rho)
+      call mpas_pool_get_array(lbc, 'lbc_scalars', lbc_tend_scalars, 1)
+      !$acc enter data create(lbc_tend_scalars)
+
+
+
+      ! call mpas_pool_get_array(mesh, 'dvEdge', dvEdge)
+      ! !$acc enter data copyin(dvEdge)
+
+      ! call mpas_pool_get_array(mesh, 'cellsOnCell', cellsOnCell)
+      ! !$acc enter data copyin(cellsOnCell)
+
+      ! call mpas_pool_get_array(mesh, 'cellsOnEdge', cellsOnEdge)
+      ! !$acc enter data copyin(cellsOnEdge)
+
+      ! call mpas_pool_get_array(mesh, 'advCellsForEdge', advCellsForEdge)
+      ! !$acc enter data copyin(advCellsForEdge)
+
+      ! call mpas_pool_get_array(mesh, 'edgesOnCell', edgesOnCell)
+      ! !$acc enter data copyin(edgesOnCell)
+
+      ! call mpas_pool_get_array(mesh, 'nAdvCellsForEdge', nAdvCellsForEdge)
+      ! !$acc enter data copyin(nAdvCellsForEdge)
+
+      ! call mpas_pool_get_array(mesh, 'nEdgesOnCell', nEdgesOnCell)
+      ! !$acc enter data copyin(nEdgesOnCell)
+
+      ! call mpas_pool_get_array(mesh, 'adv_coefs', adv_coefs)
+      ! !$acc enter data copyin(adv_coefs)
+
+      ! call mpas_pool_get_array(mesh, 'adv_coefs_3rd', adv_coefs_3rd)
+      ! !$acc enter data copyin(adv_coefs_3rd)
+
+      ! call mpas_pool_get_array(mesh, 'edgesOnCell_sign', edgesOnCell_sign)
+      ! !$acc enter data copyin(edgesOnCell_sign)
+
+      ! call mpas_pool_get_array(mesh, 'invAreaCell', invAreaCell)
+      ! !$acc enter data copyin(invAreaCell)
+
+      ! call mpas_pool_get_array(mesh, 'bdyMaskCell', bdyMaskCell)
+      ! !$acc enter data copyin(bdyMaskCell)
+
+      ! call mpas_pool_get_array(mesh, 'bdyMaskEdge', bdyMaskEdge)
+      ! !$acc enter data copyin(bdyMaskEdge)
+
+      ! call mpas_pool_get_array(mesh, 'specZoneMaskEdge', specZoneMaskEdge)
+      ! !$acc enter data copyin(specZoneMaskEdge)
+
+      ! call mpas_pool_get_array(mesh, 'invDvEdge', invDvEdge)
+      ! !$acc enter data copyin(invDvEdge)
+
+      ! call mpas_pool_get_array(mesh, 'dcEdge', dcEdge)
+      ! !$acc enter data copyin(dcEdge)
+
+      ! call mpas_pool_get_array(mesh, 'invDcEdge', invDcEdge)
+      ! !$acc enter data copyin(invDcEdge)
+
+      ! call mpas_pool_get_array(mesh, 'edgesOnEdge', edgesOnEdge)
+      ! !$acc enter data copyin(edgesOnEdge)
+
+      ! call mpas_pool_get_array(mesh, 'edgesOnVertex', edgesOnVertex)
+      ! !$acc enter data copyin(edgesOnVertex)
+
+      ! call mpas_pool_get_array(mesh, 'edgesOnVertex_sign', edgesOnVertex_sign)
+      ! !$acc enter data copyin(edgesOnVertex_sign)
+
+      ! call mpas_pool_get_array(mesh, 'nEdgesOnEdge', nEdgesOnEdge)
+      ! !$acc enter data copyin(nEdgesOnEdge)
+
+      ! call mpas_pool_get_array(mesh, 'weightsOnEdge', weightsOnEdge)
+      ! !$acc enter data copyin(weightsOnEdge)
+
+      ! call mpas_pool_get_array(mesh, 'cellsOnVertex', cellsOnVertex)
+      ! !$acc enter data copyin(cellsOnVertex)
+
+      ! call mpas_pool_get_array(mesh, 'verticesOnCell', verticesOnCell)
+      ! !$acc enter data copyin(verticesOnCell)
+
+      ! call mpas_pool_get_array(mesh, 'verticesOnEdge', verticesOnEdge)
+      ! !$acc enter data copyin(verticesOnEdge)
+
+      ! call mpas_pool_get_array(mesh, 'invAreaTriangle', invAreaTriangle)
+      ! !$acc enter data copyin(invAreaTriangle)
+
+      ! call mpas_pool_get_array(mesh, 'kiteForCell', kiteForCell)
+      ! !$acc enter data copyin(kiteForCell)
+
+      ! call mpas_pool_get_array(mesh, 'kiteAreasOnVertex', kiteAreasOnVertex)
+      ! !$acc enter data copyin(kiteAreasOnVertex)
+
+      ! call mpas_pool_get_array(mesh, 'fVertex', fVertex)
+      ! !$acc enter data copyin(fVertex)
+
+      ! call mpas_pool_get_array(mesh, 'fEdge', fEdge)
+      ! !$acc enter data copyin(fEdge)
+
+      ! call mpas_pool_get_array(mesh, 'zz', zz)
+      ! !$acc enter data copyin(zz)
+
+      ! call mpas_pool_get_array(mesh, 'rdzw', rdzw)
+      ! !$acc enter data copyin(rdzw)
+
+      ! call mpas_pool_get_array(mesh, 'rdzu', rdzu)
+      ! !$acc enter data copyin(rdzu)
+
+      ! call mpas_pool_get_array(mesh, 'zb_cell', zb_cell)
+      ! !$acc enter data copyin(zb_cell)
+
+      ! call mpas_pool_get_array(mesh, 'zb3_cell', zb3_cell)
+      ! !$acc enter data copyin(zb3_cell)
+
+      ! call mpas_pool_get_array(mesh, 'fzm', fzm)
+      ! !$acc enter data copyin(fzm)
+
+      ! call mpas_pool_get_array(mesh, 'fzp', fzp)
+      ! !$acc enter data copyin(fzp)
+
+      ! call mpas_pool_get_array(mesh, 'zb', zb)
+      ! !$acc enter data copyin(zb)
+
+      ! call mpas_pool_get_array(mesh, 'zb3', zb3)
+      ! !$acc enter data copyin(zb3)
+
+      ! call mpas_pool_get_array(mesh, 'nearestRelaxationCell', nearestRelaxationCell)
+      ! !$acc enter data copyin(nearestRelaxationCell)
+
+      ! call mpas_pool_get_array(mesh, 'zgrid', zgrid)
+      ! !$acc enter data copyin(zgrid)
+
+      ! call mpas_pool_get_array(mesh, 'zxu', zxu)
+      ! !$acc enter data copyin(zxu)
+
+      ! call mpas_pool_get_array(mesh, 'dss', dss)
+      ! !$acc enter data copyin(dss)
+
+      ! call mpas_pool_get_array(mesh, 'specZoneMaskCell', specZoneMaskCell)
+      ! !$acc enter data copyin(specZoneMaskCell)
+
+      ! call mpas_pool_get_array(mesh, 'defc_a', defc_a)
+      ! !$acc enter data copyin(defc_a)
+
+      ! call mpas_pool_get_array(mesh, 'defc_b', defc_b)
+      ! !$acc enter data copyin(defc_b)
+
+      ! call mpas_pool_get_array(mesh, 'latEdge', latEdge)
+      ! !$acc enter data copyin(latEdge)
+
+      ! call mpas_pool_get_array(mesh, 'angleEdge', angleEdge)
+      ! !$acc enter data copyin(angleEdge)
+
+      ! call mpas_pool_get_array(mesh, 'meshScalingDel2', meshScalingDel2)
+      ! !$acc enter data copyin(meshScalingDel2)
+
+      ! call mpas_pool_get_array(mesh, 'meshScalingDel4', meshScalingDel4)
+      ! !$acc enter data copyin(meshScalingDel4)
+      ! call mpas_pool_get_array(mesh, 'meshScalingRegionalCell', meshScalingRegionalCell)
+      ! !$acc enter data copyin(meshScalingRegionalCell)
+
+      ! call mpas_pool_get_array(mesh, 'meshScalingRegionalEdge', meshScalingRegionalEdge)
+      ! !$acc enter data copyin(meshScalingRegionalEdge)
+
+      ! call mpas_pool_get_array(mesh, 'latCell', latCell)
+      ! !$acc enter data copyin(latCell)
+
+      ! call mpas_pool_get_array(mesh, 'lonCell', lonCell)
+      ! !$acc enter data copyin(lonCell)
+
+      ! call mpas_pool_get_array(mesh, 'coeffs_reconstruct', coeffs_reconstruct)
+      ! !$acc enter data copyin(coeffs_reconstruct)
+
+#endif
+
+   end subroutine mpas_atm_pre_init
+
+
+   subroutine mpas_post_step_d2h(inPool)
+
+      implicit none
+
+      TYPE(mpas_pool_type), INTENT(IN) :: inPool
+
+
+#ifdef MPAS_OPENACC
+
+      type (mpas_pool_type), pointer :: state
+      type (mpas_pool_type), pointer :: diag
+      type (mpas_pool_type), pointer :: tend
+      type (mpas_pool_type), pointer :: tend_physics
+
+      real (kind=RKIND), dimension(:,:), pointer :: u_1, u_2
+      real (kind=RKIND), dimension(:,:), pointer :: w_1, w_2
+      real (kind=RKIND), dimension(:,:), pointer :: theta_m_1, theta_m_2
+      real (kind=RKIND), dimension(:,:), pointer :: rho_zz_1, rho_zz_2
+      real (kind=RKIND), dimension(:,:,:), pointer :: scalars_1, scalars_2
+      real (kind=RKIND), dimension(:,:), pointer :: theta, rho, pressure_base, pressure_p, pressure
+      real (kind=RKIND), dimension(:,:), pointer :: exner, exner_base, rtheta_p, rtheta_base, rho_p, ru, rw
+
+
+      nullify(state)
+      nullify(diag)
+     
+      
+      call mpas_pool_get_subpool(inPool, 'state', state)
+      call mpas_pool_get_subpool(inPool, 'diag', diag)
+     
+      
+      call mpas_pool_get_array(state, 'u', u_1, 1)
+      call mpas_pool_get_array(state, 'u', u_2, 2)
+      call mpas_pool_get_array(state, 'w', w_1, 1)
+      call mpas_pool_get_array(state, 'w', w_2, 2)
+      call mpas_pool_get_array(state, 'theta_m', theta_m_1, 1)  
+      call mpas_pool_get_array(state, 'theta_m', theta_m_2, 2)
+      call mpas_pool_get_array(state, 'rho_zz', rho_zz_1, 1)
+      call mpas_pool_get_array(state, 'rho_zz', rho_zz_2, 2)
+      call mpas_pool_get_array(state, 'scalars', scalars_1, 1)
+      call mpas_pool_get_array(state, 'scalars', scalars_2, 2)
+
+      !$acc update self(u_1, u_2, w_1, w_2, theta_m_1, theta_m_2, &
+      !$acc             rho_zz_1, rho_zz_2, scalars_1, scalars_2)
+
+      call mpas_pool_get_array(diag, 'theta', theta)
+      call mpas_pool_get_array(diag, 'rho', rho)
+      call mpas_pool_get_array(diag, 'pressure_p', pressure_p)
+      call mpas_pool_get_array(diag, 'pressure_base', pressure_base)
+      call mpas_pool_get_array(diag, 'pressure', pressure)
+      !$acc update self(theta, rho, pressure_p, pressure_base, pressure)
+
+      call mpas_pool_get_array(diag, 'exner', exner)
+      call mpas_pool_get_array(diag, 'exner_base', exner_base)
+      call mpas_pool_get_array(diag, 'rtheta_p', rtheta_p)
+      call mpas_pool_get_array(diag, 'rtheta_base', rtheta_base)
+      call mpas_pool_get_array(diag, 'rho_p', rho_p)
+      call mpas_pool_get_array(diag, 'ru', ru)
+      call mpas_pool_get_array(diag, 'rw', rw)
+      !$acc update self(exner, exner_base, rtheta_p, rtheta_base, rho_p, ru, rw)
+
+
+#endif
+
+   end subroutine mpas_post_step_d2h
 
 
    !----------------------------------------------------------------------------
@@ -744,6 +1351,8 @@ module atm_time_integration
       real (kind=RKIND) :: Time_new
       type (mpas_pool_type), pointer :: state
       character (len=StrKIND), pointer :: config_time_integration
+      character(len=StrKIND) :: timeStamp
+      character(len=StrKIND) :: savepoint_name
 
 
       clock => domain % clock
@@ -752,8 +1361,11 @@ module atm_time_integration
       call mpas_pool_get_config(block % configs, 'config_time_integration', config_time_integration)
       call mpas_pool_get_config(block % configs, 'config_apply_lbcs', config_apply_lbcs)
 
+      call mpas_get_time(nowTime, dateTimeString=xtime_new)
+      !$ser init directory='./ser_data' prefix='mpas_dycore' prefix_ref='mpas_dycore-mem'
+
       if (trim(config_time_integration) == 'SRK3') then
-         call atm_srk3(domain, dt, itimestep, exchange_halo_group)
+         call atm_srk3(domain, dt, itimestep, exchange_halo_group, nowTime)
       else
          call mpas_log_write('Unknown time integration option '//trim(config_time_integration), messageType=MPAS_LOG_ERR)
          call mpas_log_write('Currently, only ''SRK3'' is supported.', messageType=MPAS_LOG_CRIT)
@@ -778,7 +1390,7 @@ module atm_time_integration
    end subroutine atm_timestep
 
 
-   subroutine atm_srk3(domain, dt, itimestep, exchange_halo_group)
+   subroutine atm_srk3(domain, dt, itimestep, exchange_halo_group, nowTime)
    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
    ! Advance model state forward in time by the specified time step using 
    !   time-split RK3 scheme
@@ -798,6 +1410,7 @@ module atm_time_integration
       real (kind=RKIND), intent(in) :: dt
       integer, intent(in) :: itimestep
       procedure (halo_exchange_routine) :: exchange_halo_group
+      type (MPAS_Time_type), intent(in) :: nowTime
 
       integer :: thread
       integer :: iCell, k, iEdge
@@ -812,6 +1425,9 @@ module atm_time_integration
 
       integer :: rk_step, number_of_sub_steps
       integer :: iScalar
+
+      character (len=StrKIND) :: xtime_new
+
 
       real (kind=RKIND), dimension(3) :: rk_timestep, rk_sub_timestep
       integer, dimension(3) :: number_sub_steps
@@ -849,6 +1465,8 @@ module atm_time_integration
       real (kind=RKIND), dimension(:,:,:), pointer :: scalars, scalars_1, scalars_2
 
       real (kind=RKIND), dimension(:,:), pointer :: rqvdynten, rthdynten, theta_m
+      real (kind=RKIND), dimension(:,:), pointer :: pressure_p, rtheta_p, exner, tend_u
+      real (kind=RKIND), dimension(:,:), pointer :: rho_pp, rtheta_pp, ru_p, rw_p, pv_edge, rho_edge
       real (kind=RKIND) :: theta_local, fac_m
 
 #ifndef MPAS_CAM_DYCORE
@@ -859,6 +1477,9 @@ module atm_time_integration
       real (kind=RKIND)  :: time_dyn_step
       logical, parameter :: debug = .false.
 
+
+      call mpas_get_time(nowTime, dateTimeString=xtime_new)
+      !$ser savepoint atm_srk3 datetime=xtime_new rank=domain%dm_info%my_proc_id
 
       !
       ! Retrieve configuration options
@@ -1002,9 +1623,26 @@ module atm_time_integration
       !
       ! Communicate halos for theta_m, scalars, pressure_p, and rtheta_p
       !
+      call mpas_pool_get_array(state, 'theta_m', theta_m, 1)
+      call mpas_pool_get_array(state, 'scalars', scalars_1, 1)
+      call mpas_pool_get_array(diag, 'pressure_p', pressure_p)
+      call mpas_pool_get_array(diag, 'rtheta_p', rtheta_p)
+      !$acc update self(theta_m,scalars_1,pressure_p,rtheta_p)
+      !$ser mode write
+      !$ser data theta_m_1_pre=theta_m
+      !$ser data scalars_1_pre=scalars_1
+      !$ser data pressure_p_pre=pressure_p
+      !$ser data rtheta_p_pre=rtheta_p
       call exchange_halo_group(domain, 'dynamics:theta_m,scalars,pressure_p,rtheta_p')
-
+      !$ser data theta_m_1_post=theta_m
+      !$ser data scalars_1_post=scalars_1
+      !$ser data pressure_p_post=pressure_p
+      !$ser data rtheta_p_post=rtheta_p
+      !$acc update device(theta_m,scalars_1,pressure_p,rtheta_p)
+      
       call mpas_timer_start('atm_rk_integration_setup')
+      
+      ! $ser savepoint rk_integration_setup datetime=xtime_new
 
 !$OMP PARALLEL DO
       do thread=1,nThreads
@@ -1021,6 +1659,7 @@ module atm_time_integration
       call mpas_timer_stop('atm_rk_integration_setup')
 
       call mpas_timer_start('atm_compute_moist_coefficients')
+      ! $ser savepoint moist_coefficients datetime=xtime_new
 
 !$OMP PARALLEL DO
       do thread=1,nThreads
@@ -1072,6 +1711,8 @@ module atm_time_integration
          call mpas_timer_start('atm_compute_vert_imp_coefs')
 
          rk_step = 1
+         ! $ser savepoint vert_imp_coefs datetime=xtime_new dyn_substep=dynamics_substep
+
 !$OMP PARALLEL DO
          do thread=1,nThreads
             call atm_compute_vert_imp_coefs( state, mesh, diag, block % configs, nVertLevels, rk_sub_timestep(rk_step), &
@@ -1083,8 +1724,14 @@ module atm_time_integration
 !$OMP END PARALLEL DO
          call mpas_timer_stop('atm_compute_vert_imp_coefs')
 
+         
+      call mpas_pool_get_array(diag, 'exner', exner)
+      
+      !$acc update self(exner)
+      !$ser data exner_pre=exner
          call exchange_halo_group(domain, 'dynamics:exner')
-
+      !$ser data exner_post=exner
+      !$acc update device(exner)
 
          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
          ! BEGIN Runge-Kutta loop 
@@ -1124,6 +1771,7 @@ module atm_time_integration
             delsq_vorticity(:,nVertices+1) = 0.0_RKIND
             allocate(dpdz(nVertLevels,nCells+1))
             dpdz(:,nCells+1) = 0.0_RKIND
+         ! $ser savepoint compute_dyn_tend datetime=xtime_new dyn_substep=dynamics_substep rk_step=rk_step
 
 !$OMP PARALLEL DO
             do thread=1,nThreads
@@ -1154,9 +1802,15 @@ module atm_time_integration
             !  we are solving for all edges of owned cells to minimize communications
             !  during the acoustic substeps
             !***********************************
+            !$ser savepoint rk_loop datetime=xtime_new rank=domain%dm_info%my_proc_id rk_step=rk_step
 
 ! tend_u
+            call mpas_pool_get_array(tend, 'u', tend_u)
+            !$acc update self(tend_u)
+            !$ser data tend_u_pre=tend_u
             call exchange_halo_group(domain, 'dynamics:tend_u')
+            !$ser data tend_u_post=tend_u
+            !$acc update device(tend_u)
    
             call mpas_timer_start('small_step_prep')
    
@@ -1172,13 +1826,21 @@ module atm_time_integration
 !------------------------------------------------------------------------------------------------------------------------
 
             if (config_apply_lbcs) then  ! adjust boundary tendencies for regional_MPAS dry dynamics in the specified zone
-   
+              ! $ser savepoint apply_lbc datetime=xtime_new dyn_substep=dynamics_substep rk_step=rk_step
+
                allocate(ru_driving_tend(nVertLevels,nEdges+1))
                allocate(rt_driving_tend(nVertLevels,nCells+1))
                allocate(rho_driving_tend(nVertLevels,nCells+1))
                ru_driving_tend(1:nVertLevels,1:nEdges+1) =  mpas_atm_get_bdy_tend( clock, block, nVertLevels, nEdges, 'ru', 0.0_RKIND )
                rt_driving_tend(1:nVertLevels,1:nCells+1) =  mpas_atm_get_bdy_tend( clock, block, nVertLevels, nCells, 'rtheta_m', 0.0_RKIND )
                rho_driving_tend(1:nVertLevels,1:nCells+1) =  mpas_atm_get_bdy_tend( clock, block, nVertLevels, nCells, 'rho_zz', 0.0_RKIND )
+
+
+               ! $ser mode write
+               ! $ser data ru_driving_tend=ru_driving_tend
+               ! $ser data tert_driving_tendnd_rt=rt_driving_tend
+               ! $ser data rho_driving_tend=rho_driving_tend
+               
 !$OMP PARALLEL DO
                do thread=1,nThreads
                   call atm_bdy_adjust_dynamics_speczone_tend( tend, mesh, block % configs, nVertLevels,                 &
@@ -1204,6 +1866,12 @@ module atm_time_integration
                ru_driving_values(1:nVertLevels,1:nEdges+1) =  mpas_atm_get_bdy_state( clock, block, nVertLevels, nEdges, 'ru', time_dyn_step )
                rt_driving_values(1:nVertLevels,1:nCells+1) =  mpas_atm_get_bdy_state( clock, block, nVertLevels, nCells, 'rtheta_m', time_dyn_step )
                rho_driving_values(1:nVertLevels,1:nCells+1) =  mpas_atm_get_bdy_state( clock, block, nVertLevels, nCells, 'rho_zz', time_dyn_step )
+
+
+               ! $ser mode write
+               ! $ser data ru_driving_values=ru_driving_values
+               ! $ser data rt_driving_values=rt_driving_values
+               ! $ser data rho_driving_values=rho_driving_values
 
                call mpas_timer_start('atm_bdy_adjust_dynamics_relaxzone_tend')
 !$OMP PARALLEL DO
@@ -1231,8 +1899,14 @@ module atm_time_integration
             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
             do small_step = 1, number_sub_steps(rk_step)
+               !$ser savepoint acoustic datetime=xtime_new rank=domain%dm_info%my_proc_id rk_step=rk_step small_step=small_step
 
+               call mpas_pool_get_array(diag, 'rho_pp', rho_pp)
+               !$acc update self(rho_pp)
+               !$ser data rho_pp_pre=rho_pp
                call exchange_halo_group(domain, 'dynamics:rho_pp')
+               !$ser data rho_pp_post=rho_pp
+               !$acc update device(rho_pp)
 
                call mpas_timer_start('atm_advance_acoustic_step')
 
@@ -1255,7 +1929,12 @@ module atm_time_integration
 ! rtheta_pp
 ! This is the only communications needed during the acoustic steps because we solve for u on all edges of owned cells
 
+               call mpas_pool_get_array(diag, 'rtheta_pp', rtheta_pp)
+               !$acc update self(rtheta_pp)
+               !$ser data rtheta_pp_pre=rtheta_pp
                call exchange_halo_group(domain, 'dynamics:rtheta_pp')
+               !$ser data rtheta_pp_post=rtheta_pp
+               !$acc update device(rtheta_pp)
 
 !  complete update of horizontal momentum by including 3d divergence damping at the end of the acoustic step
 
@@ -1275,7 +1954,23 @@ module atm_time_integration
             !
             ! Communicate halos for rw_p[1,2], ru_p[1,2], rho_pp[1,2], rtheta_pp[2]
             !
+            !$ser savepoint rk_loop2 datetime=xtime_new rank=domain%dm_info%my_proc_id rk_step=rk_step
+
+            call mpas_pool_get_array(diag, 'ru_p', ru_p)
+            call mpas_pool_get_array(diag, 'rw_p', rw_p)
+            call mpas_pool_get_array(diag, 'rho_pp', rho_pp)
+            call mpas_pool_get_array(diag, 'rtheta_pp', rtheta_pp)
+            !$acc update self(rw_p,ru_p,rho_pp,rtheta_pp)
+            !$ser data rw_p_pre=rw_p
+            !$ser data ru_p_pre=ru_p
+            !$ser data rho_pp_pre=rho_pp
+            !$ser data rtheta_pp_pre=rtheta_pp
             call exchange_halo_group(domain, 'dynamics:rw_p,ru_p,rho_pp,rtheta_pp')
+            !$ser data rw_p_post=rw_p
+            !$ser data ru_p_post=ru_p
+            !$ser data rho_pp_post=rho_pp
+            !$ser data rtheta_pp_post=rtheta_pp
+            !$acc update device(rw_p,ru_p,rho_pp,rtheta_pp)
 
             call mpas_timer_start('atm_recover_large_step_variables')
 
@@ -1308,50 +2003,80 @@ module atm_time_integration
                time_dyn_step = dt_dynamics*real(dynamics_substep-1) + rk_timestep(rk_step)
 
                ru_driving_values(1:nVertLevels,1:nEdges+1) =  mpas_atm_get_bdy_state( clock, block, nVertLevels, nEdges, 'u', time_dyn_step )
+
+               !$acc enter data copyin(ru_driving_values)
+               
                ! do this inline at present - it is simple enough
+               !$acc parallel
+               !$acc loop gang
                do iEdge = 1, nEdgesSolve
                   if(bdyMaskEdge(iEdge) > nRelaxZone) then
+                     !$acc loop vector
                      do k = 1, nVertLevels
                         u(k,iEdge) = ru_driving_values(k,iEdge)
                      end do
                   end if
                end do
+               !$acc end parallel
+
+
 
                ru_driving_values(1:nVertLevels,1:nEdges+1) =  mpas_atm_get_bdy_state( clock, block, nVertLevels, nEdges, 'ru', time_dyn_step )
+
+               !$acc update device(ru_driving_values)
+               
                call mpas_pool_get_array(diag, 'ru', u)
                ! do this inline at present - it is simple enough
+               !$acc parallel
+               !$acc loop gang
                do iEdge = 1, nEdges
                   if(bdyMaskEdge(iEdge) > nRelaxZone) then
+                     !$acc loop vector
                      do k = 1, nVertLevels
                         u(k,iEdge) = ru_driving_values(k,iEdge)
                      end do
                   end if
                end do
+               !$acc end parallel
                
+               !$acc exit data delete(ru_driving_values)
+
                deallocate(ru_driving_values)
 
             end if  ! regional_MPAS addition
 
 !-------------------------------------------------------------------
-            
+            call mpas_pool_get_array(state, 'u', u, 2)
+            !$acc update self(u)
+            !$ser data u_pre=u
             ! u
             if (config_apply_lbcs) then
                call exchange_halo_group(domain, 'dynamics:u_123')
             else
                call exchange_halo_group(domain, 'dynamics:u_3')
             end if
+            !$ser data u_post=u
+            !$acc update device(u)
 
             ! scalar advection: RK3 scheme of Skamarock and Gassmann (2011). 
             ! PD or monotonicity constraints applied only on the final Runge-Kutta substep.
 
             if (config_scalar_advection .and. (.not. config_split_dynamics_transport) ) then
 
+               ! $ser savepoint advance_scalars1 datetime=xtime_new dyn_substep=dynamics_substep rk_step=rk_step
+
+
                call advance_scalars('scalars', domain, rk_step, rk_timestep, config_monotonic, config_positive_definite, &
                                     config_time_integration_order, config_split_dynamics_transport, exchange_halo_group)
 
                if (config_apply_lbcs) then  ! adjust boundary tendencies for regional_MPAS scalar transport
 
+                  call mpas_pool_get_array(state, 'scalars', scalars_2, 2)
+                  !$acc update self(scalars_2)
+                  !$ser data scalars_2_pre_1=scalars_2
                   call exchange_halo_group(domain, 'dynamics:scalars')
+                  !$ser data scalars_2_post_1=scalars_2
+                  !$acc update device(scalars_2)
 
                   allocate(scalars_driving(num_scalars,nVertLevels,nCells+1))
 
@@ -1396,18 +2121,33 @@ module atm_time_integration
             deallocate(ke_edge)
 
             call mpas_timer_stop('atm_compute_solve_diagnostics')
-
+            call mpas_pool_get_array(state, 'w', w, 2)
+            call mpas_pool_get_array(diag, 'pv_edge', pv_edge)
+            call mpas_pool_get_array(diag, 'rho_edge', rho_edge)            
+            !$acc update self(w,pv_edge,rho_edge)
+            !$ser data w_pre=w
+            !$ser data pv_edge_pre=pv_edge
+            !$ser data rho_edge_pre=rho_edge
             if (config_scalar_advection .and. (.not. config_split_dynamics_transport) ) then
                !
                ! Communicate halos for w[1,2], pv_edge[1,2], rho_edge[1,2], scalars[1,2]
                !
+               call mpas_pool_get_array(state, 'scalars', scalars_2, 2)
+               !$acc update self(scalars_2)
+               !$ser data scalars_2_pre_2=scalars_2
                call exchange_halo_group(domain, 'dynamics:w,pv_edge,rho_edge,scalars')
+               !$ser data scalars_2_post_2=scalars_2
+               !$acc update device(scalars_2)
             else
                !
                ! Communicate halos for w[1,2], pv_edge[1,2], rho_edge[1,2]
                !
                call exchange_halo_group(domain, 'dynamics:w,pv_edge,rho_edge')
             end if
+            !$ser data w_post=w
+            !$ser data pv_edge_post=pv_edge
+            !$ser data rho_edge_post=rho_edge
+            !$acc update device(w,pv_edge,rho_edge)
 
             ! set the zero-gradient condition on w for regional_MPAS
             
@@ -1421,7 +2161,12 @@ module atm_time_integration
 !$OMP END PARALLEL DO
 
               ! w halo values needs resetting after regional boundary update
+              call mpas_pool_get_array(state, 'w', w, 2)
+              !$acc update self(w)
+               !$ser data w_pre=w
               call exchange_halo_group(domain, 'dynamics:w')
+               !$ser data w_post=w
+              !$acc update device(w)
 
             end if ! end of regional_MPAS addition 
 
@@ -1432,7 +2177,18 @@ module atm_time_integration
             !
             ! Communicate halos for theta_m[1,2], pressure_p[1,2], and rtheta_p[1,2]
             !
+            call mpas_pool_get_array(state, 'theta_m', theta_m, 2)
+            call mpas_pool_get_array(diag, 'pressure_p', pressure_p)
+            call mpas_pool_get_array(diag, 'rtheta_p', rtheta_p)
+            !$acc update self(theta_m,pressure_p,rtheta_p)
+            !$ser data theta_m_pre=theta_m
+            !$ser data pressure_p_pre=pressure_p
+            !$ser data rtheta_p_pre=rtheta_p
             call exchange_halo_group(domain, 'dynamics:theta_m,pressure_p,rtheta_p')
+            !$ser data theta_m_post=theta_m
+            !$ser data pressure_p_post=pressure_p
+            !$ser data rtheta_p_post=rtheta_p
+            !$acc update device(theta_m,pressure_p,rtheta_p)
 
             !
             ! Note: A halo exchange for 'exner' here as well as after the call
@@ -1490,6 +2246,7 @@ module atm_time_integration
 
          RK3_SPLIT_TRANSPORT : do rk_step = 1, 3  ! Runge-Kutta loop
 
+            ! $ser savepoint advance_scalars2 datetime=xtime_new dyn_substep=dynamics_substep rk_step=rk_step
 
             call advance_scalars('scalars', domain, rk_step, rk_timestep, config_monotonic, config_positive_definite, &
                                  config_time_integration_order, config_split_dynamics_transport, exchange_halo_group)
@@ -1497,7 +2254,12 @@ module atm_time_integration
             if (config_apply_lbcs) then  ! adjust boundary tendencies for regional_MPAS scalar transport
 
                ! need to fill halo for horizontal filter
+               call mpas_pool_get_array(state, 'scalars', scalars_2, 2)
+               !$acc update self(scalars_2)
+               !$ser data scalars_2_pre=scalars_2
                call exchange_halo_group(domain, 'dynamics:scalars')
+               !$ser data scalars_2_post=scalars_2
+               !$acc update device(scalars_2)
    
                allocate(scalars_driving(num_scalars,nVertLevels,nCells+1))
 
@@ -1523,7 +2285,12 @@ module atm_time_integration
 !------------------------------------------------------------------------------------------------------------------------
 
             if (rk_step < 3) then
+               call mpas_pool_get_array(state, 'scalars', scalars_2, 2)
+               !$acc update self(scalars_2)
+               !$ser data scalars_2_pre=scalars_2
                call exchange_halo_group(domain, 'dynamics:scalars')
+               !$ser data scalars_2_post=scalars_2
+               !$acc update device(scalars_2)
             end if
 
          end do RK3_SPLIT_TRANSPORT
@@ -1636,7 +2403,13 @@ module atm_time_integration
 
       if (config_apply_lbcs) then  ! adjust boundary values for regional_MPAS scalar transport
 
+         call mpas_pool_get_array(state, 'scalars', scalars_2, 2)
+         !$acc update self(scalars_2)
+         !$ser data scalars_2_pre=scalars_2
          call exchange_halo_group(domain, 'dynamics:scalars')
+         !$ser data scalars_2_post=scalars_2
+         !$acc update device(scalars_2)
+
 
          allocate(scalars_driving(num_scalars,nVertLevels,nCells+1))
 
@@ -1882,12 +2655,14 @@ module atm_time_integration
       call mpas_pool_get_array(state, 'scalars', scalars_1, 1)
       call mpas_pool_get_array(state, 'scalars', scalars_2, 2)
 
-      MPAS_ACC_TIMER_START('atm_rk_integration_setup [ACC_data_xfer]')
-      !$acc enter data create(ru_save, u_2, rw_save, rtheta_p_save, rho_p_save, &
-      !$acc                   w_2, theta_m_2, rho_zz_2, rho_zz_old_split, scalars_2) &
-      !$acc            copyin(ru, rw, rtheta_p, rho_p, u_1, w_1, theta_m_1, &
-      !$acc                   rho_zz_1, scalars_1)
-      MPAS_ACC_TIMER_STOP('atm_rk_integration_setup [ACC_data_xfer]')
+
+      ! $ser mode write
+      ! $ser accdata rtheta_p=rtheta_p
+      ! $ser accdata rho_p=rho_p
+      ! $ser accdata theta_m_1=theta_m_1
+      ! $ser accdata scalars_1=scalars_1
+      ! $ser accdata rho_zz_1=rho_zz_1
+      
 
       !$acc kernels
       theta_m_2(:,cellEnd+1) = 0.0_RKIND
@@ -1935,12 +2710,8 @@ module atm_time_integration
       end do
       !$acc end parallel
 
-      MPAS_ACC_TIMER_START('atm_rk_integration_setup [ACC_data_xfer]')
-      !$acc exit data copyout(ru_save, rw_save, rtheta_p_save, rho_p_save, u_2, &
-      !$acc                   w_2, theta_m_2, rho_zz_2, rho_zz_old_split, scalars_2) &
-      !$acc            delete(ru, rw, rtheta_p, rho_p, u_1, w_1, theta_m_1, &
-      !$acc                  rho_zz_1, scalars_1)
-      MPAS_ACC_TIMER_STOP('atm_rk_integration_setup [ACC_data_xfer]')
+      ! $ser accdata scalars_2=scalars_2
+
 
    end subroutine atm_rk_integration_setup
 
@@ -1992,8 +2763,7 @@ module atm_time_integration
       moist_end = moist_end_ptr
 
       MPAS_ACC_TIMER_START('atm_compute_moist_coefficients [ACC_data_xfer]')
-      !$acc enter data create(qtot, cqw, cqu) & 
-      !$acc            copyin(scalars)
+      !$acc enter data create(qtot)
       MPAS_ACC_TIMER_STOP('atm_compute_moist_coefficients [ACC_data_xfer]')
 
       !$acc parallel default(present)
@@ -2044,9 +2814,12 @@ module atm_time_integration
       end do
       !$acc end parallel
 
+      ! $ser mode write
+      ! $ser accdata cqu=cqu
+      ! $ser accdata cqw=cqw
+
       MPAS_ACC_TIMER_START('atm_compute_moist_coefficients [ACC_data_xfer]')
-      !$acc exit data copyout(cqw, cqu, qtot) &
-      !$acc           delete(scalars)
+      !$acc exit data copyout(qtot)
       MPAS_ACC_TIMER_STOP('atm_compute_moist_coefficients [ACC_data_xfer]')
 
    end subroutine atm_compute_moist_coefficients
@@ -2180,10 +2953,15 @@ module atm_time_integration
       real (kind=RKIND), dimension( nVertLevels ) :: b_tri, c_tri
 
       MPAS_ACC_TIMER_START('atm_compute_vert_imp_coefs_work [ACC_data_xfer]')
-      !$acc enter data copyin(cqw, p, t, qtot, rb, rtb, rt, pb)
-      !$acc enter data create(cofrz, cofwr, cofwz, coftz, cofwt, a_tri, b_tri, &
-      !$acc                   c_tri, alpha_tri, gamma_tri)
+      !$acc enter data copyin(qtot)
+      !$acc enter data create(b_tri, c_tri)
       MPAS_ACC_TIMER_STOP('atm_compute_vert_imp_coefs_work [ACC_data_xfer]')
+
+
+      ! $ser mode write
+      ! $ser accdata p=p
+      ! $ser accdata t=t
+
 
       !  set coefficients
       dtseps = .5*dts*(1.+epssm)
@@ -2263,10 +3041,12 @@ module atm_time_integration
       end do ! loop over cells
       !$acc end parallel
 
+         ! $ser accdata cofrz=cofrz
+      ! $ser accdata alpha_tri=alpha_tri
+
       MPAS_ACC_TIMER_START('atm_compute_vert_imp_coefs_work [ACC_data_xfer]')
-      !$acc exit data copyout(cofrz, cofwr, cofwz, coftz, cofwt, a_tri, b_tri, &
-      !$acc                   c_tri, alpha_tri, gamma_tri)
-      !$acc exit data delete(cqw, p, t, qtot, rb, rtb, rt, pb)
+      !$acc exit data copyout( b_tri, c_tri)
+      !$acc exit data delete(qtot)
       MPAS_ACC_TIMER_STOP('atm_compute_vert_imp_coefs_work [ACC_data_xfer]')
 
    end subroutine atm_compute_vert_imp_coefs_work
@@ -2371,9 +3151,6 @@ module atm_time_integration
       integer :: iCell, iEdge, i, k
       real (kind=RKIND) :: flux
 
-      MPAS_ACC_TIMER_START('atm_set_smlstep_pert_variables [ACC_data_xfer]')
-      !$acc enter data copyin(u_tend, w_tend)
-      MPAS_ACC_TIMER_STOP('atm_set_smlstep_pert_variables [ACC_data_xfer]')
 
       ! we solve for omega instead of w (see Klemp et al MWR 2007),
       ! so here we change the w_p tendency to an omega_p tendency
@@ -2406,10 +3183,6 @@ module atm_time_integration
       end do
       !$acc end parallel
 
-      MPAS_ACC_TIMER_START('atm_set_smlstep_pert_variables [ACC_data_xfer]')
-      !$acc exit data delete(u_tend)
-      !$acc exit data copyout(w_tend)
-      MPAS_ACC_TIMER_STOP('atm_set_smlstep_pert_variables [ACC_data_xfer]')
 
    end subroutine atm_set_smlstep_pert_variables_work
 
@@ -2642,17 +3415,6 @@ module atm_time_integration
       resm = (1.0 - epssm) / (1.0 + epssm)
       rdts = 1./dts
 
-      MPAS_ACC_TIMER_START('atm_advance_acoustic_step [ACC_data_xfer]')
-      !$acc enter data copyin(exner,cqu,cofwt,coftz,cofrz,cofwr,cofwz, &
-      !$acc                a_tri,alpha_tri,gamma_tri,rho_zz,theta_m,w, &
-      !$acc                tend_ru,tend_rho,tend_rt,tend_rw,rw,rw_save)
-      !$acc enter data create(rtheta_pp_old)
-      if(small_step == 1) then
-         !$acc enter data create(ru_p,ruAvg,rho_pp,rtheta_pp,wwAvg,rw_p)
-      else
-         !$acc enter data copyin(ru_p,ruAvg,rho_pp,rtheta_pp,wwAvg,rw_p)
-      end if
-      MPAS_ACC_TIMER_STOP('atm_advance_acoustic_step [ACC_data_xfer]')
 
       if(small_step /= 1) then  !  not needed on first small step
 
@@ -2879,13 +3641,6 @@ module atm_time_integration
       end do !  end of loop over cells
       !$acc end parallel
 
-      MPAS_ACC_TIMER_START('atm_advance_acoustic_step [ACC_data_xfer]')
-      !$acc exit data delete(exner,cqu,cofwt,coftz,cofrz,cofwr,cofwz, &
-      !$acc                a_tri,alpha_tri,gamma_tri,rho_zz,theta_m,w, &
-      !$acc                tend_ru,tend_rho,tend_rt,tend_rw,rw,rw_save)
-      !$acc exit data copyout(rtheta_pp_old,ru_p,ruAvg,rho_pp, &
-      !$acc                   rtheta_pp,wwAvg,rw_p)
-      MPAS_ACC_TIMER_STOP('atm_advance_acoustic_step [ACC_data_xfer]')
 
    end subroutine atm_advance_acoustic_step_work
 
@@ -2937,9 +3692,6 @@ module atm_time_integration
       nCellsSolve = nCellsSolve_ptr
       nVertLevels = nVertLevels_ptr
 
-      MPAS_ACC_TIMER_START('atm_divergence_damping_3d [ACC_data_xfer]')
-      !$acc enter data copyin(ru_p, rtheta_pp, rtheta_pp_old, theta_m)
-      MPAS_ACC_TIMER_STOP('atm_divergence_damping_3d [ACC_data_xfer]')
 
       !$acc parallel default(present)
       !$acc loop gang worker
@@ -2972,10 +3724,6 @@ module atm_time_integration
       end do ! end loop over edges
       !$acc end parallel
 
-      MPAS_ACC_TIMER_START('atm_divergence_damping_3d [ACC_data_xfer]')
-      !$acc exit data copyout(ru_p) &
-      !$acc           delete(rtheta_pp, rtheta_pp_old, theta_m)
-      MPAS_ACC_TIMER_STOP('atm_divergence_damping_3d [ACC_data_xfer]')
       
 
    end subroutine atm_divergence_damping_3d
@@ -3166,17 +3914,7 @@ module atm_time_integration
       integer :: i, iCell, iEdge, k, cell1, cell2
       real (kind=RKIND) :: invNs, rcv, p0, flux
 
-      MPAS_ACC_TIMER_START('atm_recover_large_step_variables [ACC_data_xfer]')
-      !$acc enter data copyin(rho_p_save,rho_pp,rho_base,rw_save,rw_p, &
-      !$acc                   rtheta_p_save,rtheta_pp,rtheta_base, &
-      !$acc                   ru_save,ru_p,wwAvg,ruAvg) &
-      !$acc            create(rho_zz,rho_p,rw,w,rtheta_p,theta_m, &
-      !$acc                   ru,u)
-      if (rk_step == 3) then
-         !$acc enter data copyin(rt_diabatic_tend,exner_base) &
-         !$acc            create(exner,pressure_p)
-      end if
-      MPAS_ACC_TIMER_STOP('atm_recover_large_step_variables [ACC_data_xfer]')
+      
 
       rcv = rgas/(cp-rgas)
       p0 = 1.0e+05  ! this should come from somewhere else...
@@ -3322,17 +4060,7 @@ module atm_time_integration
       end do
       !$acc end parallel
 
-      MPAS_ACC_TIMER_START('atm_recover_large_step_variables [ACC_data_xfer]')
-      !$acc exit data delete(rho_p_save,rho_pp,rho_base,rw_save,rw_p, &
-      !$acc                   rtheta_p_save,rtheta_pp,rtheta_base, &
-      !$acc                   ru_save,ru_p) &
-      !$acc            copyout(rho_zz,rho_p,rw,w,rtheta_p,theta_m, &
-      !$acc                   ru,u,wwAvg,ruAvg)
-      if (rk_step == 3) then
-         !$acc exit data delete(rt_diabatic_tend,exner_base) &
-         !$acc            copyout(exner,pressure_p)
-      end if
-      MPAS_ACC_TIMER_STOP('atm_recover_large_step_variables [ACC_data_xfer]')
+      
 
    end subroutine atm_recover_large_step_variables_work
 
@@ -3569,10 +4297,14 @@ module atm_time_integration
 
       MPAS_ACC_TIMER_START('atm_advance_scalars [ACC_data_xfer]')
       !$acc enter data create(horiz_flux_arr)
-      !$acc enter data copyin(uhAvg, scalar_new)
       MPAS_ACC_TIMER_STOP('atm_advance_scalars [ACC_data_xfer]')
 
-      !$acc parallel async
+
+      ! $ser accdata scalar_new=scalar_new
+      ! $ser accdata uhAvg=uhAvg
+
+
+      !$acc parallel
       !$acc loop gang worker private(scalar_weight2, ica)
       do iEdge=edgeStart,edgeEnd
 
@@ -3666,14 +4398,12 @@ module atm_time_integration
       !
 
       MPAS_ACC_TIMER_START('atm_advance_scalars [ACC_data_xfer]')
-#ifndef DO_PHYSICS
-      !$acc enter data create(scalar_tend_save)
-#else
-      !$acc enter data copyin(scalar_tend_save)
-#endif
-      !$acc enter data copyin(scalar_old, fnm, fnp, rdnw, wwAvg, rho_zz_old, rho_zz_new)
       !$acc enter data create(scalar_tend_column, wdtn)
       MPAS_ACC_TIMER_STOP('atm_advance_scalars [ACC_data_xfer]')
+
+
+      ! $ser accdata scalar_old=scalar_old
+
 
       !$acc parallel wait
       !$acc loop gang worker private(scalar_tend_column, wdtn)
@@ -3753,10 +4483,13 @@ module atm_time_integration
       end do
       !$acc end parallel
 
+        ! $ser accdata scalar_tend_save=scalar_tend_save
+      ! $ser accdata scalar_tend_column=scalar_tend_column
+      ! $ser accdata scalar_new2=scalar_new
+
       MPAS_ACC_TIMER_START('atm_advance_scalars [ACC_data_xfer]')
-      !$acc exit data copyout(scalar_new)
-      !$acc exit data delete(scalar_tend_column, wdtn, uhAvg, wwAvg, scalar_old, fnm, fnp, &
-      !$acc                  rdnw, rho_zz_old, rho_zz_new, horiz_flux_arr, scalar_tend_save)
+      !$acc exit data delete(scalar_tend_column, wdtn, &
+      !$acc                  horiz_flux_arr)
       MPAS_ACC_TIMER_STOP('atm_advance_scalars [ACC_data_xfer]')
 
    end subroutine atm_advance_scalars_work
@@ -4015,9 +4748,6 @@ module atm_time_integration
 
 
       MPAS_ACC_TIMER_START('atm_advance_scalars_mono [ACC_data_xfer]')
-      !$acc data present(nEdgesOnCell, edgesOnCell, edgesOnCell_sign, &
-      !$acc              invAreaCell, cellsOnCell, cellsOnEdge, nAdvCellsForEdge, &
-      !$acc              advCellsForEdge, adv_coefs, adv_coefs_3rd, dvEdge, bdyMaskCell)
 
 #ifdef DO_PHYSICS
       !$acc enter data copyin(scalar_tend)
@@ -4027,8 +4757,10 @@ module atm_time_integration
       if (local_advance_density) then
          !$acc enter data copyin(rho_zz_int)
       end if
-      !$acc enter data copyin(scalars_old, rho_zz_old, rdnw, uhAvg, wwAvg)
       MPAS_ACC_TIMER_STOP('atm_advance_scalars_mono [ACC_data_xfer]')
+
+
+      ! $ser accdata scalars_old_mono=scalars_old
 
       !$acc parallel
 
@@ -4116,12 +4848,10 @@ module atm_time_integration
 
       end if
 
+      ! AG: Note that scalar_old, scalar_new in this subroutine are not the same 
+      ! variables as 'scalars' obtained from the state pool. 
       MPAS_ACC_TIMER_START('atm_advance_scalars_mono [ACC_data_xfer]')
-      if (.not. local_advance_density) then
-         !$acc enter data copyin(rho_zz_new)
-      end if
-      !$acc enter data copyin(scalars_new, fnm, fnp)
-      !$acc enter data create(scalar_old, scalar_new, scale_arr, s_min, s_max, &
+      !$acc enter data create(scale_arr, s_min, s_max, &
       !$acc                   flux_arr, flux_tmp, flux_upwind_tmp, wdtn)
       MPAS_ACC_TIMER_STOP('atm_advance_scalars_mono [ACC_data_xfer]')
 
@@ -4584,7 +5314,6 @@ module atm_time_integration
          !$acc end parallel
 
 #ifdef DEBUG_TRANSPORT
-         !$acc update self(scalar_new)
          !$acc update self(s_max)
          !$acc update self(s_min)
 
@@ -4626,18 +5355,16 @@ module atm_time_integration
 
       end do !  loop over scalars
 
+
+      ! $ser accdata scalars_new_mono2=scalars_new
+
+
       MPAS_ACC_TIMER_START('atm_advance_scalars_mono [ACC_data_xfer]')
       if (local_advance_density) then
          !$acc exit data copyout(rho_zz_int)
-      else
-         !$acc exit data delete(rho_zz_new)
       end if
-      !$acc exit data copyout(scalars_new)
-      !$acc exit data delete(scalars_old, scalar_old, scalar_new, scale_arr, s_min, s_max, &
-      !$acc                  rho_zz_old, flux_arr, flux_tmp, flux_upwind_tmp, wdtn, wwAvg, &
-      !$acc                  uhAvg, fnm, fnp, rdnw)
-
-      !$acc end data
+      !$acc exit data delete(scale_arr, s_min, s_max, &
+      !$acc                  flux_arr, flux_tmp, flux_upwind_tmp, wdtn)
       MPAS_ACC_TIMER_STOP('atm_advance_scalars_mono [ACC_data_xfer]')
 
    end subroutine atm_advance_scalars_mono_work
@@ -5073,44 +5800,17 @@ module atm_time_integration
 
       MPAS_ACC_TIMER_START('atm_compute_dyn_tend_work [ACC_data_xfer]')
       if (rk_step == 1) then
-         !$acc enter data create(tend_w_euler)
-         !$acc enter data create(tend_u_euler)
-         !$acc enter data create(tend_theta_euler)
-         !$acc enter data create(tend_rho)
-
-         !$acc enter data create(kdiff)
          !$acc enter data copyin(tend_rho_physics)
-         !$acc enter data copyin(rb, qtot, rr_save)
-         !$acc enter data copyin(divergence, vorticity)
+         !$acc enter data copyin(qtot)
          !$acc enter data create(delsq_u)
-         !$acc enter data copyin(v)
          !$acc enter data create(delsq_vorticity, delsq_divergence)
-         !$acc enter data copyin(u_init, v_init)
          !$acc enter data create(delsq_w)
-      else
-         !$acc enter data copyin(tend_w_euler)
-         !$acc enter data copyin(tend_u_euler)
-         !$acc enter data copyin(tend_theta_euler)
-         !$acc enter data copyin(tend_rho)
       end if
       !$acc enter data create(dpdz)
-      !$acc enter data create(tend_u)
-      !$acc enter data copyin(cqu, pp, u, w, pv_edge, rho_edge, ke)
-      !$acc enter data create(h_divergence)
-      !$acc enter data copyin(ru, rw)
       !$acc enter data copyin(rayleigh_damp_coef)
       !$acc enter data copyin(tend_ru_physics)
-      !$acc enter data create(tend_w)
-      !$acc enter data copyin(rho_zz)
-      !$acc enter data create(tend_theta)
-      !$acc enter data copyin(theta_m)
-      !$acc enter data copyin(ru_save, theta_m_save)
-      !$acc enter data create(delsq_theta)
-      !$acc enter data copyin(cqw)
       !$acc enter data copyin(tend_rtheta_physics)
-      !$acc enter data copyin(rw_save, rt_diabatic_tend)
-      !$acc enter data create(rthdynten)
-      !$acc enter data copyin(t_init)
+      !$acc enter data create(delsq_theta)
       MPAS_ACC_TIMER_STOP('atm_compute_dyn_tend_work [ACC_data_xfer]')
 
       prandtl_inv = 1.0_RKIND / prandtl
@@ -6146,44 +6846,18 @@ module atm_time_integration
 
       MPAS_ACC_TIMER_START('atm_compute_dyn_tend_work [ACC_data_xfer]')
       if (rk_step == 1) then
-         !$acc exit data copyout(tend_w_euler)
-         !$acc exit data copyout(tend_u_euler)
-         !$acc exit data copyout(tend_theta_euler)
-         !$acc exit data copyout(tend_rho)
-
-         !$acc exit data delete(kdiff)
          !$acc exit data delete(tend_rho_physics)
-         !$acc exit data delete(rb, qtot, rr_save)
-         !$acc exit data delete(divergence, vorticity)
+         !$acc exit data delete(qtot)
          !$acc exit data copyout(delsq_u)
-         !$acc exit data delete(v)
          !$acc exit data delete(delsq_vorticity, delsq_divergence)
-         !$acc exit data delete(u_init, v_init)
          !$acc exit data copyout(delsq_w)
-      else
-         !$acc exit data delete(tend_w_euler)
-         !$acc exit data delete(tend_u_euler)
-         !$acc exit data delete(tend_theta_euler)
-         !$acc exit data delete(tend_rho)
       end if
       !$acc exit data delete(dpdz)
-      !$acc exit data copyout(tend_u)
-      !$acc exit data delete(cqu, pp, u, w, pv_edge, rho_edge, ke)
-      !$acc exit data copyout(h_divergence)
-      !$acc exit data delete(ru, rw)
+      
       !$acc exit data delete(rayleigh_damp_coef)
       !$acc exit data delete(tend_ru_physics)
-      !$acc exit data copyout(tend_w)
-      !$acc exit data delete(rho_zz)
-      !$acc exit data copyout(tend_theta)
-      !$acc exit data delete(theta_m)
-      !$acc exit data delete(ru_save, theta_m_save)
-      !$acc exit data delete(delsq_theta)
-      !$acc exit data delete(cqw)
       !$acc exit data delete(tend_rtheta_physics)
-      !$acc exit data delete(rw_save, rt_diabatic_tend)
-      !$acc exit data copyout(rthdynten)
-      !$acc exit data delete(t_init)
+      !$acc exit data delete(delsq_theta)
       MPAS_ACC_TIMER_STOP('atm_compute_dyn_tend_work [ACC_data_xfer]')
 
    end subroutine atm_compute_dyn_tend_work
@@ -6351,7 +7025,6 @@ module atm_time_integration
       real (kind=RKIND) :: ke_fact, efac
       logical :: reconstruct_v
 
-
       MPAS_ACC_TIMER_START('atm_compute_solve_diagnostics [ACC_data_xfer]')
       !$acc enter data copyin(cellsOnEdge,dcEdge,dvEdge, &
       !$acc                   edgesOnVertex,edgesOnVertex_sign,invAreaTriangle, &
@@ -6370,7 +7043,7 @@ module atm_time_integration
       ! Compute height on cell edges at velocity locations
       !
       MPAS_ACC_TIMER_START('atm_compute_solve_diagnostics [ACC_data_xfer]')
-      !$acc enter data create(h_edge,ke_edge,vorticity,divergence)
+      !$acc enter data create(ke_edge)  ! local variable
       MPAS_ACC_TIMER_STOP('atm_compute_solve_diagnostics [ACC_data_xfer]')
       !$acc parallel default(present)
       !$acc loop gang
@@ -6456,9 +7129,7 @@ module atm_time_integration
       !
       ! Replace 2.0 with 2 in exponentiation to avoid outside chance that
       ! compiler will actually allow "float raised to float" operation
-      MPAS_ACC_TIMER_START('atm_compute_solve_diagnostics [ACC_data_xfer]')
-      !$acc enter data create(ke)
-      MPAS_ACC_TIMER_STOP('atm_compute_solve_diagnostics [ACC_data_xfer]')
+      
       !$acc parallel default(present)
       !$acc loop gang
       do iCell=cellStart,cellEnd
@@ -6559,12 +7230,7 @@ module atm_time_integration
         if(rk_step /= 3) reconstruct_v = .false.
       end if
 
-      MPAS_ACC_TIMER_START('atm_compute_solve_diagnostics [ACC_data_xfer]')
-      if (reconstruct_v) then
-         !$acc enter data create(v)
-      else
-         !$acc enter data copyin(v)
-      end if
+      MPAS_ACC_TIMER_START('atm_compute_solve_diagnostics [ACC_data_xfer]')     
       MPAS_ACC_TIMER_STOP('atm_compute_solve_diagnostics [ACC_data_xfer]')
 
       if (reconstruct_v) then
@@ -6593,10 +7259,7 @@ module atm_time_integration
       !  ( this computes pv_vertex at all vertices bounding real cells )
       !
       ! Avoid dividing h_vertex by areaTriangle and move areaTriangle into
-      ! numerator for the pv_vertex calculation
-      MPAS_ACC_TIMER_START('atm_compute_solve_diagnostics [ACC_data_xfer]')
-      !$acc enter data create(pv_vertex)
-      MPAS_ACC_TIMER_STOP('atm_compute_solve_diagnostics [ACC_data_xfer]')
+      ! numerator for the pv_vertex calculation      
       !$acc parallel default(present)
       !$acc loop collapse(2)
       do iVertex = vertexStart,vertexEnd
@@ -6620,9 +7283,6 @@ module atm_time_integration
       ! Compute pv at the edges
       !   ( this computes pv_edge at all edges bounding real cells )
       !
-      MPAS_ACC_TIMER_START('atm_compute_solve_diagnostics [ACC_data_xfer]')
-      !$acc enter data create(pv_edge)
-      MPAS_ACC_TIMER_STOP('atm_compute_solve_diagnostics [ACC_data_xfer]')
       !$acc parallel default(present)
       !$acc loop collapse(2)
       do iEdge = edgeStart,edgeEnd
@@ -6640,9 +7300,7 @@ module atm_time_integration
          !    ( this computes pv_cell for all real cells )
          !  only needed for APVM upwinding
          !
-         MPAS_ACC_TIMER_START('atm_compute_solve_diagnostics [ACC_data_xfer]')
-         !$acc enter data create(pv_cell)
-         MPAS_ACC_TIMER_STOP('atm_compute_solve_diagnostics [ACC_data_xfer]')
+        
          !$acc parallel default(present)
          !$acc loop gang
          do iCell=cellStart,cellEnd
@@ -6701,14 +7359,14 @@ module atm_time_integration
          !$acc end parallel
 
          MPAS_ACC_TIMER_START('atm_compute_solve_diagnostics [ACC_data_xfer]')
-         !$acc exit data delete(pv_cell,gradPVt,gradPVn)
+         !$acc exit data delete(gradPVt,gradPVn)
          MPAS_ACC_TIMER_STOP('atm_compute_solve_diagnostics [ACC_data_xfer]')
 
       end if  ! apvm upwinding
 
 
       MPAS_ACC_TIMER_START('atm_compute_solve_diagnostics [ACC_data_xfer]')
-      !$acc exit data delete(cellsOnEdge,dcEdge,dvEdge, &
+     !$acc exit data delete(cellsOnEdge,dcEdge,dvEdge, &
       !$acc                  edgesOnVertex,edgesOnVertex_sign,invAreaTriangle, &
       !$acc                  nEdgesOnCell,edgesOnCell, &
       !$acc                  edgesOnCell_sign,invAreaCell, &
@@ -6718,11 +7376,7 @@ module atm_time_integration
       !$acc                  verticesOnEdge, &
       !$acc                  fVertex,invDvEdge,invDcEdge)
       !$acc exit data delete(u,h)
-      !$acc exit data copyout(h_edge,ke_edge,vorticity,divergence, &
-      !$acc                   ke, &
-      !$acc                   v, &
-      !$acc                   pv_vertex, &
-      !$acc                   pv_edge)
+      !$acc exit data copyout(ke_edge)
       MPAS_ACC_TIMER_STOP('atm_compute_solve_diagnostics [ACC_data_xfer]')
 
    end subroutine atm_compute_solve_diagnostics_work
@@ -6817,18 +7471,7 @@ module atm_time_integration
       !$acc enter data copyin(cellsOnEdge,nEdgesOnCell,edgesOnCell, &
       !$acc                   edgesOnCell_sign,zz,fzm,fzp,zb,zb3, &
       !$acc                   zb_cell,zb3_cell)
-
-      ! copyin the data that is only on the right-hand side
-      !$acc enter data copyin(scalars(index_qv,:,:),u,w,rho,theta, &
-      !$acc                           rho_base,theta_base)
-
-      ! copyin the data that will be modified in this routine
-      !$acc enter data create(theta_m,rho_zz,ru,rw,rho_p,rtheta_base, &
-      !$acc                   rtheta_p,exner,exner_base,pressure_p, &
-      !$acc                   pressure_base)
       MPAS_ACC_TIMER_STOP('atm_init_coupled_diagnostics [ACC_data_xfer]')
-
-
 
       rcv = rgas / (cp-rgas)
       p0 = 1.e5  ! this should come from somewhere else...
@@ -6951,15 +7594,6 @@ module atm_time_integration
       !$acc exit data delete(cellsOnEdge,nEdgesOnCell,edgesOnCell, &
       !$acc                  edgesOnCell_sign,zz,fzm,fzp,zb,zb3, &
       !$acc                  zb_cell,zb3_cell)
-
-      ! delete the data that is only on the right-hand side
-      !$acc exit data delete(scalars(index_qv,:,:),u,w,rho,theta, &
-      !$acc                           rho_base,theta_base)
-
-      ! copyout the data that will be modified in this routine
-      !$acc exit data copyout(theta_m,rho_zz,ru,rw,rho_p,rtheta_base, &
-      !$acc                   rtheta_p,exner,exner_base,pressure_p, &
-      !$acc                   pressure_base)
       MPAS_ACC_TIMER_STOP('atm_init_coupled_diagnostics [ACC_data_xfer]')
 
    end subroutine atm_init_coupled_diagnostics
@@ -7024,19 +7658,13 @@ module atm_time_integration
       call mpas_pool_get_array(state, 'rho_zz', rho_zz_1, 1)
       call mpas_pool_get_array(state, 'rho_zz', rho_zz_2, 2)
 
-      MPAS_ACC_TIMER_START('atm_rk_dynamics_substep_finish [ACC_data_xfer]')
-      !$acc enter data create(ru_save, u_1, rtheta_p_save, theta_m_1, rho_p_save, rw_save, &
-      !$acc                   w_1, rho_zz_1) &
-      !$acc            copyin(ru, u_2, rtheta_p, rho_p, theta_m_2, rho_zz_2, rw, &
-      !$acc                   w_2, ruAvg, wwAvg, ruAvg_split, wwAvg_split, rho_zz_old_split)
-      MPAS_ACC_TIMER_STOP('atm_rk_dynamics_substep_finish [ACC_data_xfer]')
 
       !$acc kernels
       theta_m_1(:,cellEnd+1) = 0.0_RKIND
       !$acc end kernels
 
       inv_dynamics_split = 1.0_RKIND / real(dynamics_split)
-      
+
       if (dynamics_substep < dynamics_split) then
          !$acc parallel default(present)
          !$acc loop gang worker
@@ -7133,13 +7761,6 @@ module atm_time_integration
          !$acc end parallel
       end if
 
-      MPAS_ACC_TIMER_START('atm_rk_dynamics_substep_finish [ACC_data_xfer]')
-      !$acc exit data copyout(ru_save, u_1, rtheta_p_save, rho_p_save, rw_save, &
-      !$acc                   w_1, theta_m_1, rho_zz_1, ruAvg, wwAvg, ruAvg_split, &
-      !$acc                   wwAvg_split) &
-      !$acc            delete(ru, u_2, rtheta_p, rho_p, theta_m_2, rho_zz_2, rw, &
-      !$acc                  w_2, rho_zz_old_split)
-      MPAS_ACC_TIMER_STOP('atm_rk_dynamics_substep_finish [ACC_data_xfer]')
 
    end subroutine atm_rk_dynamics_substep_finish
 
@@ -7194,9 +7815,6 @@ module atm_time_integration
 
       integer :: iCell, k
 
-      MPAS_ACC_TIMER_START('atm_zero_gradient_w_bdy_work [ACC_data_xfer]')
-      !$acc enter data copyin(w)
-      MPAS_ACC_TIMER_STOP('atm_zero_gradient_w_bdy_work [ACC_data_xfer]')
 
       !$acc parallel default(present)
       !$acc loop gang worker
@@ -7211,10 +7829,7 @@ module atm_time_integration
       end do
       !$acc end parallel
 
-      MPAS_ACC_TIMER_START('atm_zero_gradient_w_bdy_work [ACC_data_xfer]')
-      !$acc exit data copyout(w)
-      MPAS_ACC_TIMER_STOP('atm_zero_gradient_w_bdy_work [ACC_data_xfer]')
-
+      
 
    end subroutine atm_zero_gradient_w_bdy_work
 
@@ -7255,9 +7870,7 @@ module atm_time_integration
       call mpas_pool_get_array(tend, 'rt_diabatic_tend', rt_diabatic_tend)
 
       MPAS_ACC_TIMER_START('atm_bdy_adjust_dynamics_speczone_tend [ACC_data_xfer]')
-      !$acc enter data copyin(tend_ru,tend_rho,tend_rt,tend_rw, &
-      !$acc                   rt_diabatic_tend) &
-      !$acc            copyin(rho_driving_tend,rt_driving_tend, &
+      !$acc enter data copyin(rho_driving_tend,rt_driving_tend, &
       !$acc                   ru_driving_tend)
       MPAS_ACC_TIMER_STOP('atm_bdy_adjust_dynamics_speczone_tend [ACC_data_xfer]')
 
@@ -7288,10 +7901,15 @@ module atm_time_integration
       end do
       !$acc end parallel
 
+        ! $ser mode write
+      ! $ser accdata tend_ru=tend_ru
+      ! $ser accdata tend_rt=tend_rt
+      ! $ser accdata tend_rw=tend_rw
+      ! $ser accdata tend_rho=tend_rho
+
+
       MPAS_ACC_TIMER_START('atm_bdy_adjust_dynamics_speczone_tend [ACC_data_xfer]')
-      !$acc exit data copyout(tend_ru,tend_rho,tend_rt, &
-      !$acc                   tend_rw,rt_diabatic_tend) &
-      !$acc            delete(rho_driving_tend,rt_driving_tend, &
+      !$acc exit data delete(rho_driving_tend,rt_driving_tend, &
       !$acc                   ru_driving_tend)
       MPAS_ACC_TIMER_STOP('atm_bdy_adjust_dynamics_speczone_tend [ACC_data_xfer]')
       
@@ -7380,8 +7998,8 @@ module atm_time_integration
       vertexDegree = vertexDegree_ptr
 
       MPAS_ACC_TIMER_START('atm_bdy_adjust_dynamics_relaxzone_tend [ACC_data_xfer]')
-      !$acc enter data copyin(tend_rho, tend_rt, rho_zz, theta_m, rho_driving_values, &
-      !$acc                   rt_driving_values, tend_ru, ru, ru_driving_values)
+      !$acc enter data copyin(rho_driving_values, &
+      !$acc                   rt_driving_values, ru_driving_values)
       !$acc enter data create(divergence1, divergence2, vorticity1, vorticity2)
       MPAS_ACC_TIMER_STOP('atm_bdy_adjust_dynamics_relaxzone_tend [ACC_data_xfer]')
       
@@ -7400,6 +8018,11 @@ module atm_time_integration
       end do
       !$acc end parallel
 
+      ! $ser mode write
+      ! $ser accdata tend_rho1=tend_rho
+      ! $ser accdata tend_rt1=tend_rt
+      
+
       !$acc parallel default(present)
       !$acc loop gang worker
       do iEdge = edgeStart, edgeEnd
@@ -7412,6 +8035,8 @@ module atm_time_integration
          end if
       end do
       !$acc end parallel
+
+      ! $ser accdata tend_ru1=tend_ru
 
       !  Second, the horizontal filter for rtheta_m and rho_zz
       !$acc parallel default(present)
@@ -7444,6 +8069,10 @@ module atm_time_integration
 
       end do
       !$acc end parallel
+
+      ! $ser accdata tend_rho2=tend_rho
+      ! $ser accdata tend_rt2=tend_rt
+
 
       !  Third (and last), the horizontal filter for ru
       !$acc parallel default(present)
@@ -7530,9 +8159,11 @@ module atm_time_integration
        end do  !  end of loop over edges
        !$acc end parallel
 
+            ! $ser mode write
+      ! $ser accdata tend_ru_fin=tend_ru
+
        MPAS_ACC_TIMER_START('atm_bdy_adjust_dynamics_relaxzone_tend [ACC_data_xfer]')
-      !$acc exit data copyout(tend_rho, tend_rt, tend_ru)
-      !$acc exit data delete(rho_zz, theta_m, ru, rho_driving_values, rt_driving_values, &
+      !$acc exit data delete(rho_driving_values, rt_driving_values, &
       !$acc            ru_driving_values, divergence1, divergence2, vorticity1, vorticity2)
       MPAS_ACC_TIMER_STOP('atm_bdy_adjust_dynamics_relaxzone_tend [ACC_data_xfer]')
        
@@ -7570,8 +8201,7 @@ module atm_time_integration
       call mpas_pool_get_array(diag, 'rtheta_base', rtheta_base)
 
       MPAS_ACC_TIMER_START('atm_bdy_reset_speczone_values [ACC_data_xfer]')
-      !$acc enter data copyin(rt_driving_values, rho_driving_values, rtheta_base, &
-      !$acc                   theta_m, rtheta_p)
+      !$acc enter data copyin(rt_driving_values, rho_driving_values)
       MPAS_ACC_TIMER_STOP('atm_bdy_reset_speczone_values [ACC_data_xfer]')
       
       !$acc parallel default(present)
@@ -7588,8 +8218,7 @@ module atm_time_integration
       !$acc end parallel
 
       MPAS_ACC_TIMER_START('atm_bdy_reset_speczone_values [ACC_data_xfer]')
-      !$acc exit data copyout(theta_m, rtheta_p) &
-      !$acc            delete(rt_driving_values, rho_driving_values, rtheta_base)
+      !$acc exit data delete(rt_driving_values, rho_driving_values)
       MPAS_ACC_TIMER_STOP('atm_bdy_reset_speczone_values [ACC_data_xfer]')
 
    end subroutine atm_bdy_reset_speczone_values
@@ -7682,7 +8311,7 @@ module atm_time_integration
       !---
       MPAS_ACC_TIMER_START('atm_bdy_adjust_scalars [ACC_data_xfer]')
       !$acc enter data create(scalars_tmp) &
-      !$acc            copyin(scalars_driving, scalars_new)
+      !$acc            copyin(scalars_driving)
       MPAS_ACC_TIMER_STOP('atm_bdy_adjust_scalars [ACC_data_xfer]')
 
       !$acc parallel default(present)
@@ -7766,8 +8395,7 @@ module atm_time_integration
       !$acc end parallel
 
       MPAS_ACC_TIMER_START('atm_bdy_adjust_scalars [ACC_data_xfer]')
-      !$acc exit data delete(scalars_tmp, scalars_driving) &
-      !$acc           copyout(scalars_new)
+      !$acc exit data delete(scalars_tmp, scalars_driving)
       MPAS_ACC_TIMER_STOP('atm_bdy_adjust_scalars [ACC_data_xfer]')
 
    end subroutine atm_bdy_adjust_scalars_work
@@ -7839,7 +8467,7 @@ module atm_time_integration
       !---
 
       MPAS_ACC_TIMER_START('atm_bdy_set_scalars_work [ACC_data_xfer]')
-      !$acc enter data copyin(scalars_new, scalars_driving)
+      !$acc enter data copyin(scalars_driving)
       MPAS_ACC_TIMER_STOP('atm_bdy_set_scalars_work [ACC_data_xfer]')
 
       !$acc parallel default(present)
@@ -7864,7 +8492,6 @@ module atm_time_integration
       !$acc end parallel
 
       MPAS_ACC_TIMER_START('atm_bdy_set_scalars_work [ACC_data_xfer]')
-      !$acc exit data copyout(scalars_new)
       !$acc exit data delete(scalars_driving)
       MPAS_ACC_TIMER_STOP('atm_bdy_set_scalars_work [ACC_data_xfer]')
             
@@ -7949,9 +8576,6 @@ module atm_time_integration
 
          allocate(spd(nVertLevels,nEdgesSolve))
 
-         MPAS_ACC_TIMER_START('summarize_timestep [ACC_data_xfer]')
-         !$acc enter data copyin(w,u,v)
-         MPAS_ACC_TIMER_STOP('summarize_timestep [ACC_data_xfer]')
 
          scalar_min = 1.0e20
          lin_indexMax = huge(1)
@@ -8229,9 +8853,6 @@ module atm_time_integration
             call mpas_log_write('NaN detected in ''u'' field.', messageType=MPAS_LOG_CRIT)
          end if
 
-         MPAS_ACC_TIMER_START('summarize_timestep [ACC_data_xfer]')
-         !$acc exit data delete(w,u,v)
-         MPAS_ACC_TIMER_STOP('summarize_timestep [ACC_data_xfer]')
 
          deallocate(spd)
 
@@ -8249,7 +8870,6 @@ module atm_time_integration
          nVertLevels = nVertLevels_ptr
 
          MPAS_ACC_TIMER_START('summarize_timestep [ACC_data_xfer]')
-         !$acc enter data copyin(w,u)
          MPAS_ACC_TIMER_STOP('summarize_timestep [ACC_data_xfer]')
 
          scalar_min = 0.0
@@ -8283,7 +8903,6 @@ module atm_time_integration
          call mpas_log_write('global min, max u $r $r', realArgs=(/global_scalar_min, global_scalar_max/))
 
          MPAS_ACC_TIMER_START('summarize_timestep [ACC_data_xfer]')
-         !$acc exit data delete(w,u)
          MPAS_ACC_TIMER_STOP('summarize_timestep [ACC_data_xfer]')
       end if
 
@@ -8302,7 +8921,6 @@ module atm_time_integration
          num_scalars = num_scalars_ptr
 
          MPAS_ACC_TIMER_START('summarize_timestep [ACC_data_xfer]')
-         !$acc enter data copyin(scalars)
          MPAS_ACC_TIMER_STOP('summarize_timestep [ACC_data_xfer]')
 
          do iScalar = 1, num_scalars
@@ -8322,9 +8940,6 @@ module atm_time_integration
             call mpas_log_write(' global min, max scalar $i $r $r', intArgs=(/iScalar/), realArgs=(/global_scalar_min, global_scalar_max/))
          end do
 
-         MPAS_ACC_TIMER_START('summarize_timestep [ACC_data_xfer]')
-         !$acc exit data delete(scalars)
-         MPAS_ACC_TIMER_STOP('summarize_timestep [ACC_data_xfer]')
       end if
 
    end subroutine summarize_timestep

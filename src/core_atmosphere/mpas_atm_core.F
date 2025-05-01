@@ -43,7 +43,7 @@ module atm_core
       use mpas_atm_dimensions, only : mpas_atm_set_dims
       use mpas_atm_diagnostics_manager, only : mpas_atm_diag_setup
       use mpas_atm_threading, only : mpas_atm_threading_init
-      use atm_time_integration, only : mpas_atm_dynamics_init
+      use atm_time_integration, only : mpas_atm_dynamics_init, mpas_atm_pre_init
       use mpas_timer, only : mpas_timer_start, mpas_timer_stop
       use mpas_attlist, only : mpas_modify_att
       use mpas_string_utils, only : mpas_string_replace
@@ -76,7 +76,7 @@ module atm_core
       integer, pointer :: nVertLevels, maxEdges, maxEdges2, num_scalars
       character (len=ShortStrKIND) :: init_stream_name
       real (kind=R8KIND) :: input_start_time, input_stop_time
-
+      real (kind=RKIND), dimension(:,:), pointer :: pv_edge, ru, rw
 
       ierr = 0
 
@@ -94,6 +94,7 @@ module atm_core
       ! Set up inner dimensions used by arrays in optimized dynamics routines
       !
       call mpas_pool_get_subpool(domain % blocklist % structs, 'state', state)
+      call mpas_pool_get_subpool(domain % blocklist % structs, 'diag', diag)
       call mpas_pool_get_dimension(state, 'nVertLevels', nVertLevels)
       call mpas_pool_get_dimension(state, 'maxEdges', maxEdges)
       call mpas_pool_get_dimension(state, 'maxEdges2', maxEdges2)
@@ -264,6 +265,7 @@ module atm_core
       do while (associated(block))
          call mpas_pool_get_subpool(block % structs, 'mesh', mesh)
          call mpas_pool_get_subpool(block % structs, 'state', state)
+         call mpas_atm_pre_init(domain)
 
          call atm_mpas_init_block(domain % dminfo, domain % streamManager, block, mesh, dt)
 
@@ -284,8 +286,13 @@ module atm_core
 
           block => block % next
       end do
-
+      
+      call mpas_pool_get_array(diag, 'pv_edge', pv_edge)
+      call mpas_pool_get_array(diag, 'ru', ru)
+      call mpas_pool_get_array(diag, 'rw', rw)
+      !$acc update self(pv_edge,ru,rw)
       call exchange_halo_group(domain, 'initialization:pv_edge,ru,rw')
+      !$acc update device(pv_edge,ru,rw)
 
       call mpas_atm_diag_setup(domain % streamManager, domain % blocklist % configs, &
                                domain % blocklist % structs, domain % clock, domain % dminfo)
@@ -293,6 +300,7 @@ module atm_core
       !
       ! Prepare the dynamics for integration
       !
+      !call mpas_atm_pre_init(domain)
       call mpas_atm_dynamics_init(domain)
 
    end function atm_core_init
@@ -595,6 +603,7 @@ module atm_core
       use mpas_derived_types, only : MPAS_STREAM_LATEST_BEFORE, MPAS_STREAM_INPUT, MPAS_STREAM_INPUT_OUTPUT
       use mpas_timer, only : mpas_timer_start, mpas_timer_stop
       use mpas_atm_boundaries, only : mpas_atm_update_bdy_tend
+      use atm_time_integration, only : mpas_post_step_d2h
       use mpas_atm_diagnostics_manager, only : mpas_atm_diag_update, mpas_atm_diag_compute, mpas_atm_diag_reset
    
       implicit none
@@ -817,7 +826,7 @@ module atm_core
               call mpas_pool_get_subpool(block_ptr % structs, 'mesh', mesh)
               call mpas_pool_get_subpool(block_ptr % structs, 'tend', tend)
               call atm_compute_output_diagnostics(state, 1, diag, mesh)
-
+              call mpas_post_step_d2h(block_ptr % structs)
               block_ptr => block_ptr % next
            end do
          end if
@@ -925,6 +934,8 @@ module atm_core
 
       call mpas_pool_get_array(mesh, 'zz', zz)
 
+      !$acc parallel
+      !$acc loop gang vector collapse(2)
       do iCell=1,nCells
          do k=1,nVertLevels
             theta(k,iCell) = theta_m(k,iCell) / (1._RKIND + rvord * scalars(index_qv,k,iCell))
@@ -932,6 +943,7 @@ module atm_core
             pressure(k,iCell) = pressure_base(k,iCell) + pressure_p(k,iCell)
          end do
       end do
+      !$acc end parallel
 
    end subroutine atm_compute_output_diagnostics
    
@@ -1000,8 +1012,11 @@ module atm_core
 #ifdef DO_PHYSICS
       !proceed with physics if moist_physics is set to true:
       if(moist_physics) then
+         call mpas_log_write('call physics timetracker')
          call physics_timetracker(domain,dt,clock,itimestep,xtime_s)
+         call mpas_log_write('call physics driver')
          call physics_driver(domain,itimestep,xtime_s)
+         call mpas_log_write('end physics timetracker')
       endif
 #endif
 
