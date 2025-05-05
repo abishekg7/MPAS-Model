@@ -20,6 +20,11 @@ module atm_time_integration
    use mpas_pool_routines
    use mpas_kind_types
    use mpas_constants
+   !USE m_ser, ONLY: ser_init, ser_array
+   USE m_serialize, ONLY: fs_add_savepoint_metainfo, fs_read_field, fs_create_savepoint, fs_write_field
+   USE utils_ppser, ONLY: ppser_set_mode, ppser_initialize, ppser_get_mode, ppser_savepoint, &
+       ppser_serializer, ppser_serializer_ref, ppser_intlength, ppser_reallength, &
+       ppser_realtype, ppser_zrperturb
    use mpas_dmpar
    use mpas_vector_reconstruction
    ! Added only clause to keep xlf90 from getting confused from the overloaded abs intrinsic in mpas_timekeeping
@@ -734,6 +739,8 @@ module atm_time_integration
       type (MPAS_Time_type), intent(in) :: nowTime
       integer, intent(in) :: itimestep
       procedure (halo_exchange_routine) :: exchange_halo_group
+      character(len=StrKIND) :: timeStamp
+      character(len=StrKIND) :: savepoint_name
 
 
       type (MPAS_Time_type) :: currTime
@@ -752,8 +759,12 @@ module atm_time_integration
       call mpas_pool_get_config(block % configs, 'config_time_integration', config_time_integration)
       call mpas_pool_get_config(block % configs, 'config_apply_lbcs', config_apply_lbcs)
 
+      call mpas_get_time(nowTime, dateTimeString=xtime_new)
+      !$ser init directory='./ser_data' prefix='mpas_dycore' prefix_ref='mpas_dycore-ref'
+
+
       if (trim(config_time_integration) == 'SRK3') then
-         call atm_srk3(domain, dt, itimestep, exchange_halo_group)
+         call atm_srk3(domain, dt, itimestep, exchange_halo_group, nowTime)
       else
          call mpas_log_write('Unknown time integration option '//trim(config_time_integration), messageType=MPAS_LOG_ERR)
          call mpas_log_write('Currently, only ''SRK3'' is supported.', messageType=MPAS_LOG_CRIT)
@@ -778,7 +789,7 @@ module atm_time_integration
    end subroutine atm_timestep
 
 
-   subroutine atm_srk3(domain, dt, itimestep, exchange_halo_group)
+   subroutine atm_srk3(domain, dt, itimestep, exchange_halo_group, nowTime)
    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
    ! Advance model state forward in time by the specified time step using 
    !   time-split RK3 scheme
@@ -798,9 +809,13 @@ module atm_time_integration
       real (kind=RKIND), intent(in) :: dt
       integer, intent(in) :: itimestep
       procedure (halo_exchange_routine) :: exchange_halo_group
+      type (MPAS_Time_type), intent(in) :: nowTime
 
       integer :: thread
       integer :: iCell, k, iEdge
+
+      character (len=StrKIND) :: xtime_new
+
 
       integer, pointer :: nThreads
       integer, dimension(:), pointer :: cellThreadStart, cellThreadEnd
@@ -859,6 +874,11 @@ module atm_time_integration
       real (kind=RKIND)  :: time_dyn_step
       logical, parameter :: debug = .false.
 
+      
+
+      call mpas_get_time(nowTime, dateTimeString=xtime_new)
+      ! !$ser savepoint atm_srk3 datetime=xtime_new rank=domain%dm_info%my_proc_id
+      !$ser savepoint atm_srk3 datetime=xtime_new
 
       !
       ! Retrieve configuration options
@@ -1005,7 +1025,7 @@ module atm_time_integration
       call exchange_halo_group(domain, 'dynamics:theta_m,scalars,pressure_p,rtheta_p')
 
       call mpas_timer_start('atm_rk_integration_setup')
-
+      !$ser savepoint rk_integration_setup datetime=xtime_new
 !$OMP PARALLEL DO
       do thread=1,nThreads
          call atm_rk_integration_setup(state, diag, nVertLevels, num_scalars, &
@@ -1021,7 +1041,7 @@ module atm_time_integration
       call mpas_timer_stop('atm_rk_integration_setup')
 
       call mpas_timer_start('atm_compute_moist_coefficients')
-
+      !$ser savepoint moist_coefficients datetime=xtime_new
 !$OMP PARALLEL DO
       do thread=1,nThreads
          call atm_compute_moist_coefficients( block % dimensions, state, diag, mesh, &     !MGD could do away with dimensions arg
@@ -1072,6 +1092,7 @@ module atm_time_integration
          call mpas_timer_start('atm_compute_vert_imp_coefs')
 
          rk_step = 1
+         !$ser savepoint vert_imp_coefs datetime=xtime_new dyn_substep=dynamics_substep
 !$OMP PARALLEL DO
          do thread=1,nThreads
             call atm_compute_vert_imp_coefs( state, mesh, diag, block % configs, nVertLevels, rk_sub_timestep(rk_step), &
@@ -1124,6 +1145,8 @@ module atm_time_integration
             delsq_vorticity(:,nVertices+1) = 0.0_RKIND
             allocate(dpdz(nVertLevels,nCells+1))
             dpdz(:,nCells+1) = 0.0_RKIND
+         
+         !$ser savepoint compute_dyn_tend datetime=xtime_new dyn_substep=dynamics_substep rk_step=rk_step
 
 !$OMP PARALLEL DO
             do thread=1,nThreads
@@ -1172,13 +1195,19 @@ module atm_time_integration
 !------------------------------------------------------------------------------------------------------------------------
 
             if (config_apply_lbcs) then  ! adjust boundary tendencies for regional_MPAS dry dynamics in the specified zone
-   
+           !$ser savepoint apply_lbc datetime=xtime_new dyn_substep=dynamics_substep rk_step=rk_step
+ 
                allocate(ru_driving_tend(nVertLevels,nEdges+1))
                allocate(rt_driving_tend(nVertLevels,nCells+1))
                allocate(rho_driving_tend(nVertLevels,nCells+1))
                ru_driving_tend(1:nVertLevels,1:nEdges+1) =  mpas_atm_get_bdy_tend( clock, block, nVertLevels, nEdges, 'ru', 0.0_RKIND )
                rt_driving_tend(1:nVertLevels,1:nCells+1) =  mpas_atm_get_bdy_tend( clock, block, nVertLevels, nCells, 'rtheta_m', 0.0_RKIND )
                rho_driving_tend(1:nVertLevels,1:nCells+1) =  mpas_atm_get_bdy_tend( clock, block, nVertLevels, nCells, 'rho_zz', 0.0_RKIND )
+
+               !$ser mode write
+               !$ser data ru_driving_tend=ru_driving_tend
+               !$ser data tert_driving_tendnd_rt=rt_driving_tend
+               !$ser data rho_driving_tend=rho_driving_tend
 !$OMP PARALLEL DO
                do thread=1,nThreads
                   call atm_bdy_adjust_dynamics_speczone_tend( tend, mesh, block % configs, nVertLevels,                 &
@@ -1204,6 +1233,11 @@ module atm_time_integration
                ru_driving_values(1:nVertLevels,1:nEdges+1) =  mpas_atm_get_bdy_state( clock, block, nVertLevels, nEdges, 'ru', time_dyn_step )
                rt_driving_values(1:nVertLevels,1:nCells+1) =  mpas_atm_get_bdy_state( clock, block, nVertLevels, nCells, 'rtheta_m', time_dyn_step )
                rho_driving_values(1:nVertLevels,1:nCells+1) =  mpas_atm_get_bdy_state( clock, block, nVertLevels, nCells, 'rho_zz', time_dyn_step )
+
+               !$ser mode write
+               !$ser data ru_driving_values=ru_driving_values
+               !$ser data rt_driving_values=rt_driving_values
+               !$ser data rho_driving_values=rho_driving_values
 
                call mpas_timer_start('atm_bdy_adjust_dynamics_relaxzone_tend')
 !$OMP PARALLEL DO
@@ -1345,6 +1379,8 @@ module atm_time_integration
             ! PD or monotonicity constraints applied only on the final Runge-Kutta substep.
 
             if (config_scalar_advection .and. (.not. config_split_dynamics_transport) ) then
+
+               !$ser savepoint advance_scalars1 datetime=xtime_new dyn_substep=dynamics_substep rk_step=rk_step
 
                call advance_scalars('scalars', domain, rk_step, rk_timestep, config_monotonic, config_positive_definite, &
                                     config_time_integration_order, config_split_dynamics_transport, exchange_halo_group)
@@ -1490,6 +1526,7 @@ module atm_time_integration
 
          RK3_SPLIT_TRANSPORT : do rk_step = 1, 3  ! Runge-Kutta loop
 
+            !$ser savepoint advance_scalars2 datetime=xtime_new dyn_substep=dynamics_substep rk_step=rk_step
 
             call advance_scalars('scalars', domain, rk_step, rk_timestep, config_monotonic, config_positive_definite, &
                                  config_time_integration_order, config_split_dynamics_transport, exchange_halo_group)
@@ -1889,6 +1926,15 @@ module atm_time_integration
       !$acc                   rho_zz_1, scalars_1)
       MPAS_ACC_TIMER_STOP('atm_rk_integration_setup [ACC_data_xfer]')
 
+      !$ser mode write
+      !$ser accdata rtheta_p=rtheta_p
+      !$ser accdata rho_p=rho_p
+      !$ser accdata theta_m_1=theta_m_1
+      !$ser accdata scalars_1=scalars_1
+      !$ser accdata rho_zz_1=rho_zz_1
+
+
+
       !$acc kernels
       theta_m_2(:,cellEnd+1) = 0.0_RKIND
       !$acc end kernels
@@ -1935,6 +1981,9 @@ module atm_time_integration
       end do
       !$acc end parallel
 
+      !$ser accdata scalars_2=scalars_2
+
+     
       MPAS_ACC_TIMER_START('atm_rk_integration_setup [ACC_data_xfer]')
       !$acc exit data copyout(ru_save, rw_save, rtheta_p_save, rho_p_save, u_2, &
       !$acc                   w_2, theta_m_2, rho_zz_2, rho_zz_old_split, scalars_2) &
@@ -2043,6 +2092,10 @@ module atm_time_integration
          end if
       end do
       !$acc end parallel
+
+      !$ser mode write
+      !$ser accdata cqu=cqu
+      !$ser accdata cqw=cqw
 
       MPAS_ACC_TIMER_START('atm_compute_moist_coefficients [ACC_data_xfer]')
       !$acc exit data copyout(cqw, cqu, qtot) &
@@ -2185,6 +2238,10 @@ module atm_time_integration
       !$acc                   c_tri, alpha_tri, gamma_tri)
       MPAS_ACC_TIMER_STOP('atm_compute_vert_imp_coefs_work [ACC_data_xfer]')
 
+      !$ser mode write
+      !$ser accdata p=p
+      !$ser accdata t=t
+
       !  set coefficients
       dtseps = .5*dts*(1.+epssm)
       rcv = rgas/(cp-rgas)
@@ -2262,6 +2319,9 @@ module atm_time_integration
 
       end do ! loop over cells
       !$acc end parallel
+
+      !$ser accdata cofrz=cofrz
+      !$ser accdata alpha_tri=alpha_tri
 
       MPAS_ACC_TIMER_START('atm_compute_vert_imp_coefs_work [ACC_data_xfer]')
       !$acc exit data copyout(cofrz, cofwr, cofwz, coftz, cofwt, a_tri, b_tri, &
@@ -3572,6 +3632,9 @@ module atm_time_integration
       !$acc enter data copyin(uhAvg, scalar_new)
       MPAS_ACC_TIMER_STOP('atm_advance_scalars [ACC_data_xfer]')
 
+      !$ser accdata scalar_new=scalar_new
+      !$ser accdata uhAvg=uhAvg
+
       !$acc parallel async
       !$acc loop gang worker private(scalar_weight2, ica)
       do iEdge=edgeStart,edgeEnd
@@ -3675,6 +3738,10 @@ module atm_time_integration
       !$acc enter data create(scalar_tend_column, wdtn)
       MPAS_ACC_TIMER_STOP('atm_advance_scalars [ACC_data_xfer]')
 
+
+      !$ser accdata scalar_old=scalar_old
+
+
       !$acc parallel wait
       !$acc loop gang worker private(scalar_tend_column, wdtn)
       do iCell=cellSolveStart,cellSolveEnd
@@ -3752,6 +3819,11 @@ module atm_time_integration
 
       end do
       !$acc end parallel
+
+      !$ser accdata scalar_tend_save=scalar_tend_save
+      !$ser accdata scalar_tend_column=scalar_tend_column
+      !$ser accdata scalar_new2=scalar_new
+
 
       MPAS_ACC_TIMER_START('atm_advance_scalars [ACC_data_xfer]')
       !$acc exit data copyout(scalar_new)
@@ -4029,6 +4101,9 @@ module atm_time_integration
       end if
       !$acc enter data copyin(scalars_old, rho_zz_old, rdnw, uhAvg, wwAvg)
       MPAS_ACC_TIMER_STOP('atm_advance_scalars_mono [ACC_data_xfer]')
+
+      !$ser accdata scalars_old_mono=scalars_old
+      
 
       !$acc parallel
 
@@ -4625,6 +4700,8 @@ module atm_time_integration
          !$acc end parallel
 
       end do !  loop over scalars
+
+      !$ser accdata scalars_new_mono2=scalars_new
 
       MPAS_ACC_TIMER_START('atm_advance_scalars_mono [ACC_data_xfer]')
       if (local_advance_density) then
@@ -7288,6 +7365,13 @@ module atm_time_integration
       end do
       !$acc end parallel
 
+      !$ser mode write
+      !$ser accdata tend_ru=tend_ru
+      !$ser accdata tend_rt=tend_rt
+      !$ser accdata tend_rw=tend_rw
+      !$ser accdata tend_rho=tend_rho
+
+
       MPAS_ACC_TIMER_START('atm_bdy_adjust_dynamics_speczone_tend [ACC_data_xfer]')
       !$acc exit data copyout(tend_ru,tend_rho,tend_rt, &
       !$acc                   tend_rw,rt_diabatic_tend) &
@@ -7400,6 +7484,11 @@ module atm_time_integration
       end do
       !$acc end parallel
 
+      !$ser mode write
+      !$ser accdata tend_rho1=tend_rho
+      !$ser accdata tend_rt1=tend_rt
+      
+
       !$acc parallel default(present)
       !$acc loop gang worker
       do iEdge = edgeStart, edgeEnd
@@ -7444,6 +7533,9 @@ module atm_time_integration
 
       end do
       !$acc end parallel
+
+      !$ser accdata tend_rho2=tend_rho
+      !$ser accdata tend_rt2=tend_rt
 
       !  Third (and last), the horizontal filter for ru
       !$acc parallel default(present)
@@ -7529,6 +7621,11 @@ module atm_time_integration
 
        end do  !  end of loop over edges
        !$acc end parallel
+
+      !$ser mode write
+      !$ser accdata tend_ru_fin=tend_ru
+
+
 
        MPAS_ACC_TIMER_START('atm_bdy_adjust_dynamics_relaxzone_tend [ACC_data_xfer]')
       !$acc exit data copyout(tend_rho, tend_rt, tend_ru)
