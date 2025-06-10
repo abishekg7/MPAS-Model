@@ -16,19 +16,12 @@
       //".*make.*cpu.*::args_build_options"     : [ "-b", "-j $NUM_PROCS" ],
       ".*make.*::args_build_options"     : [ "-b", "-j $NUM_PROCS"],
       ".*gnu.*::args_target"     : [ "-t", "gnu" ],
-      ".*make.*nvhpc.*::args_target"     : [ "-t", "nvhpc" ],
+      ".*nvhpc.*::args_target"     : [ "-t", "nvhpc" ],
+      ".*intel.*::args_target"     : [ "-t", "intel" ],
       ".*make.*nvhpc.*gpu.*::args_openacc"     : [ "-g" ],
       ".*test_.*::args_namelist" : [ "-b", "atmosphere_model"],
-      ".*test_jw.*::args_namelist" : [ "-f", "/glade/campaign/mmm/wmr/mpas_ci/jw_baroclinic"],
-      ".*test_conus.*::args_namelist" : [ "-f", "/glade/campaign/mmm/wmr/mpas_ci/conus_lam"],
-      ".*test_.*cpu.*::args_namelist" :
-        [ 
-          "-p", "mpiexec -n $CI_NTASKS -ppn $CI_TASKS_PER_NODE"
-        ],
-      ".*test_.*gpu.*::args_namelist" :
-        [ 
-          "-p", "mpiexec -n $CI_NTASKS -ppn $CI_TASKS_PER_NODE set_gpu_rank "
-        ],
+      ".*test_jw.*::args_namelist" : [ "-f", "jw_baroclinic"],
+      ".*test_conus.*::args_namelist" : [ "-f", "conus_lam"],
       //".*test.*(base|parallel|multinode).*::args_namelist" :
       //  [ 
       //    "-q", "01:00:00",
@@ -56,6 +49,25 @@
         [ 
           "-e", "LD_LIBRARY_PATH=/glade/u/apps/derecho/23.09/spack/opt/spack/parallel-netcdf/1.12.3/cray-mpich/8.1.27/gcc/12.2.0/sq5u/lib:/glade/u/apps/derecho/23.09/spack/opt/spack/netcdf/4.9.2/gcc/12.2.0/gjc6/lib:\\\\$LD_LIBRARY_PATH"
         ]
+    },
+    "eris"   :
+    {
+      "submission" : "LOCAL",
+      "arguments"  :
+      {
+        ".*build.*::base_env_numprocs"          : [ "-e", "NUM_PROCS=4" ],
+        ".*test_.*::base_env_numprocs"       : [ "-e", "NUM_PROCS=4" ],
+        ".*test_.*.*::args" : [ "-s", "LOCAL"],
+        ".*test_.*::args" : [ "-r", "/users/agopal/mpas_ci"],
+        ".*gnu.*::common_modules"   : [ "gnu/12.1.0","openmpi/5.0.5", "pnetcdf/1.13.0", "netcdf/4.8.1", "cdo/2.5.2" ],
+        ".*intel.*::common_modules"   : [ "intel/2023.0.0","openmpi/5.0.5", "pnetcdf/1.13.0", "cdo/2.5.2" ],
+        //".*gnu.*::test_modules"   : [ "gcc/12.2.0","openmpi/4.1.4", "pnetcdf/1.12.3", "netcdf/4.8.1" ],
+        //".*::path" : [ "-e", "PNETCDF=/users/agopal/software/pnetcdf-1.13.0/install,PATH=/home/agopal/software/openmpi-5.0.5/install/bin:$PATH,LD_LIBRARY_PATH=/nfs/coe-sw/compilers/gnu/12.1.0/lib64/:$LD_LIBRARY_PATH" ],
+        ".*test_.*cpu.*::args_namelist" :
+        [ 
+          "-p", "mpirun -n $CI_NTASKS "
+        ]
+      }
     },
     // Derecho-specifics
     "hsn.de.hpc"  :
@@ -108,12 +120,21 @@
       {
         // We want NUM_PROCS to match ncpus
         //"base_env_numprocs"      : [ "-e", "NUM_PROCS=16, LD_LIBRARY_PATH=/glade/u/apps/derecho/23.09/spack/opt/spack/parallel-netcdf/1.12.3/cray-mpich/8.1.27/gcc/12.2.0/sq5u/lib:/glade/u/apps/derecho/23.09/spack/opt/spack/netcdf/4.9.2/gcc/12.2.0/gjc6/lib:\\\\$LD_LIBRARY_PATH" ],
+        ".*test_.*.*::args" : [ "-s", "LOCAL"],
         "base_env_numprocs"      : [ "-e", "NUM_PROCS=16" ],
         "global_modules" : [ "ncarenv/23.09"],
         //"very_last_modules"       : [  "cray-mpich", "parallel-netcdf" ],
         ".*gnu.*::test_modules"   : [ "gcc/12.2.0","cray-mpich", "parallel-netcdf", "netcdf" ],
-        ".*nvhpc.*::test_modules"   : [ "nvhpc/24.3","cray-mpich","ncarcompilers", "parallel-netcdf", "cuda" ]
-        
+        ".*nvhpc.*::test_modules"   : [ "nvhpc/24.3","cray-mpich","ncarcompilers", "parallel-netcdf", "cuda" ],
+        ".*test_.*cpu.*::args_namelist" :
+        [ 
+          "-p", "mpiexec -n $CI_NTASKS -ppn $CI_TASKS_PER_NODE"
+        ],
+      ".*test_.*gpu.*::args_namelist" :
+        [ 
+          "-p", "mpiexec -n $CI_NTASKS -ppn $CI_TASKS_PER_NODE set_gpu_rank "
+        ],
+        "*.gnu.*test_.*::args_namelist_dir" : ["-e", "LD_LIBRARY_PATH=/glade/u/apps/derecho/23.09/spack/opt/spack/parallel-netcdf/1.12.3/cray-mpich/8.1.27/gcc/12.2.0/sq5u/lib:/glade/u/apps/derecho/23.09/spack/opt/spack/netcdf/4.9.2/gcc/12.2.0/gjc6/lib:\\\\$LD_LIBRARY_PATH"  ]
       }
     }
   },
@@ -125,7 +146,6 @@
         "arguments" :
         {
           // Remove auto-filled dir and supply sub-testcase specific ones
-          ".*test_.*::args_namelist_dir" : ["-e", "LD_LIBRARY_PATH=/glade/u/apps/derecho/23.09/spack/opt/spack/parallel-netcdf/1.12.3/cray-mpich/8.1.27/gcc/12.2.0/sq5u/lib:/glade/u/apps/derecho/23.09/spack/opt/spack/netcdf/4.9.2/gcc/12.2.0/gjc6/lib:\\\\$LD_LIBRARY_PATH"  ]
         }
       },
       "steps" :
@@ -138,21 +158,21 @@
         {
           "submit_options" : { "timelimit" : "00:15:00" },
           "command"      : ".ci/tests/runTestCases.sh",
-          "arguments" : ["-d", "cpu", "-t", "gnu", "-c", "jw", "-g", "base"]
+          "arguments" : ["-d", "cpu", "-c", "jw", "-g", "base"]
           //"dependencies" : { "make-release" : "afterok" }
         },
         "test_jw-restart-cpu" :
         {
           "submit_options" : { "timelimit" : "00:15:00" },
           "command"      : ".ci/tests/runTestCases.sh",
-          "arguments" : ["-d", "cpu", "-t", "gnu", "-c", "jw", "-g", "restart"],
+          "arguments" : ["-d", "cpu", "-c", "jw", "-g", "restart"],
           "dependencies" : { "test_jw-base-cpu" : "afterok" }
         },
         "test_jw-mpi-cpu" :
         {
           "submit_options" : { "timelimit" : "00:15:00" },
           "command"      : ".ci/tests/runTestCases.sh",
-          "arguments" : ["-d", "cpu", "-t", "gnu", "-c", "jw", "-g", "mpi"],
+          "arguments" : ["-d", "cpu", "-c", "jw", "-g", "mpi"],
           "dependencies" : { "test_jw-restart-cpu" : "afterok" }
         }
       }
@@ -177,8 +197,46 @@
         {
           "submit_options" : { "timelimit" : "00:15:00" },
           "command"      : ".ci/tests/runTestCases.sh",
-          "arguments" : ["-d", "cpu", "-t", "gnu", "-c", "jw", "-g", "base"],
+          "arguments" : ["-d", "cpu", "-c", "jw", "-g", "base"],
           "dependencies" : { "make-release-double" : "afterok" }
+        }
+      }
+    },
+    "intel" :
+    {
+      "submit_options" :
+      {
+        "arguments" :
+        {
+          // Remove auto-filled dir and supply sub-testcase specific ones          
+        }
+      },
+      "steps" :
+      {
+        "make-release" :
+         {
+           "command"      : ".ci/tests/build.sh"
+         },
+        "test_jw-base-cpu" :
+        {
+          "submit_options" : { "timelimit" : "00:15:00" },
+          "command"      : ".ci/tests/runTestCases.sh",
+          "arguments" : ["-d", "cpu", "-c", "jw", "-g", "base"],
+          "dependencies" : { "make-release" : "afterok" }
+        },
+        "test_jw-restart-cpu" :
+        {
+          "submit_options" : { "timelimit" : "00:15:00" },
+          "command"      : ".ci/tests/runTestCases.sh",
+          "arguments" : ["-d", "cpu", "-c", "jw", "-g", "restart"],
+          "dependencies" : { "test_jw-base-cpu" : "afterok" }
+        },
+        "test_jw-mpi-cpu" :
+        {
+          "submit_options" : { "timelimit" : "00:15:00" },
+          "command"      : ".ci/tests/runTestCases.sh",
+          "arguments" : ["-d", "cpu", "-c", "jw", "-g", "mpi"],
+          "dependencies" : { "test_jw-restart-cpu" : "afterok" }
         }
       }
     },
@@ -194,21 +252,21 @@
         {
          "submit_options" : { "timelimit" : "00:15:00" },
          "command"      : ".ci/tests/runTestCases.sh",
-         "arguments" : ["-d", "cpu", "-t", "nvhpc", "-c", "jw", "-g", "base"],
+         "arguments" : ["-d", "cpu", "-c", "jw", "-g", "base"],
          "dependencies" : { "make-nvhpc-release-cpu" : "afterok" }
         },
         "test_jw-nvhpc-restart-cpu" :
         {
          "submit_options" : { "timelimit" : "00:15:00" },
          "command"      : ".ci/tests/runTestCases.sh",
-         "arguments" : ["-d", "cpu", "-t", "nvhpc", "-c", "jw", "-g", "restart"],
+         "arguments" : ["-d", "cpu", "-c", "jw", "-g", "restart"],
          "dependencies" : { "test_jw-nvhpc-base-cpu" : "afterok" }
         },
         "test_jw-nvhpc-perf-cpu" :
         {
          "submit_options" : { "timelimit" : "00:15:00" },
          "command"      : ".ci/tests/runTestCases.sh",
-         "arguments" : ["-d", "cpu", "-t", "nvhpc", "-c", "jw", "-g", "perf"],
+         "arguments" : ["-d", "cpu", "-c", "jw", "-g", "perf"],
          "dependencies" : { "test_jw-nvhpc-base-cpu" : "afterok" }
         }
 
@@ -226,42 +284,42 @@
         {
           "submit_options" : { "timelimit" : "00:15:00" },
           "command"      : ".ci/tests/runTestCases.sh",
-          "arguments" : ["-d", "gpu", "-t", "nvhpc", "-c", "jw", "-g", "base"],
+          "arguments" : ["-d", "gpu", "-c", "jw", "-g", "base"],
           "dependencies" : { "make-nvhpc-release-gpu" : "afterok" }
         },
         "test_jw-nvhpc-restart-gpu" :
         {
           "submit_options" : { "timelimit" : "00:15:00" },
           "command"      : ".ci/tests/runTestCases.sh",
-          "arguments" : ["-d", "gpu", "-t", "nvhpc", "-c", "jw", "-g", "restart"],
+          "arguments" : ["-d", "gpu", "-c", "jw", "-g", "restart"],
           "dependencies" : { "test_jw-nvhpc-base-gpu" : "afterok" }
         },
         "test_jw-nvhpc-multigpu-gpu" :
         {
           "submit_options" : { "timelimit" : "00:15:00" },
           "command"      : ".ci/tests/runTestCases.sh",
-          "arguments" : ["-d", "gpu", "-t", "nvhpc", "-c", "jw", "-g", "multigpu"],
+          "arguments" : ["-d", "gpu", "-c", "jw", "-g", "multigpu"],
           "dependencies" : { "test_jw-nvhpc-restart-gpu" : "afterok" }
         },
         "test_jw-nvhpc-perf-gpu" :
         {
           "submit_options" : { "timelimit" : "00:15:00" },
           "command"      : ".ci/tests/runTestCases.sh",
-          "arguments" : ["-d", "gpu", "-t", "nvhpc", "-c", "jw", "-g", "perf"],
+          "arguments" : ["-d", "gpu", "-c", "jw", "-g", "perf"],
           "dependencies" : { "test_jw-nvhpc-restart-gpu" : "afterok" }
         },
         "test_conus-nvhpc-base-gpu" :
         {
           "submit_options" : { "timelimit" : "00:15:00" },
           "command"      : ".ci/tests/runTestCases.sh",
-          "arguments" : ["-d", "gpu", "-t", "nvhpc", "-c", "conus", "-g", "base"],
+          "arguments" : ["-d", "gpu", "-c", "conus", "-g", "base"],
           "dependencies" : { "test_jw-nvhpc-multigpu-gpu" : "afterok" }
         },
         "test_conus-nvhpc-restart-gpu" :
         {
           "submit_options" : { "timelimit" : "00:15:00" },
           "command"      : ".ci/tests/runTestCases.sh",
-          "arguments" : ["-d", "gpu", "-t", "nvhpc", "-c", "conus", "-g", "restart"],
+          "arguments" : ["-d", "gpu", "-c", "conus", "-g", "restart"],
           "dependencies" : { "test_conus-nvhpc-base-gpu" : "afterok" }
         }
 

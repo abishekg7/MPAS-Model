@@ -66,7 +66,7 @@ while getopts c:g:r:b:f:d:q:y:z:w:p:t:k:s:i:e:nh opt; do
       testType="$OPTARG"
     ;;
     r)
-      rootDir="$OPTARG"
+      caseInputPrefix="$OPTARG"
     ;;
     b)
       mpasExecutable="$OPTARG"
@@ -100,6 +100,9 @@ while getopts c:g:r:b:f:d:q:y:z:w:p:t:k:s:i:e:nh opt; do
     ;;
     k)
       diffExec="$OPTARG"
+    ;;
+    s)
+      submissionType="$OPTARG"
     ;;
     e)
       envVars="$envVars,$OPTARG"
@@ -156,19 +159,28 @@ baserunDir=${testcase}_${toolchain}_base_${device}_${precision}
 TESTNAME="${testcase} ${toolchain} ${testType} ${device} ${precision}"
 echo "TEST : $TESTNAME"
 
-# from https://ncar-hpc-docs.readthedocs.io/en/latest/pbs/job-scripts/#derecho
-CI_NNODES=$(cat ${PBS_NODEFILE} | sort | uniq | wc -l)
-CI_NTASKS=$(cat ${PBS_NODEFILE} | sort | wc -l)
-CI_TASKS_PER_NODE=$((${CI_NTASKS} / ${CI_NNODES}))
 
-echo "CI_NNODES: $CI_NNODES , CI_NTASKS: $CI_NTASKS , CI_TASKS_PER_NODE: $CI_TASKS_PER_NODE"
+if [ "$submissionType" == "PBS" ]; then
+    # from https://ncar-hpc-docs.readthedocs.io/en/latest/pbs/job-scripts/#derecho
+    CI_NNODES=$(cat ${PBS_NODEFILE} | sort | uniq | wc -l)
+    CI_NTASKS=$(cat ${PBS_NODEFILE} | sort | wc -l)
+    CI_TASKS_PER_NODE=$((${CI_NTASKS} / ${CI_NNODES}))
+    echo "CI_NNODES: $CI_NNODES , CI_NTASKS: $CI_NTASKS , CI_TASKS_PER_NODE: $CI_TASKS_PER_NODE"
+elif [ "$submissionType" == "LOCAL" ]; then
+    echo "using local execution"
+    CI_NTASKS=2
+else
+    echo "Error: Invalid submissionType '$submissionType'. Must be one of 'PBS' or 'LOCAL'."
+    exit 1
+fi
 
 
 log_file="log.atmosphere.0000.out"
 
 # Re-evaluate input values for delayed expansion
-eval "rootDir=\$( realpath \"$rootDir\" )"
-eval "caseInputDir=\$( realpath \"$caseInputDir\" )"
+eval "caseInputPrefix=\$( realpath \"$caseInputPrefix\" )"
+eval "caseInputDir=\$( realpath \"$caseInputPrefix/$caseInputDir\" )"
+echo "caseInputDir: $caseInputDir"
 eval "parallelExec=\"$parallelExec\""
 eval "runDir=\"$runDir\""
 eval "baserunDir=\"$baserunDir\""
@@ -178,9 +190,11 @@ runDir=$( realpath $runDir )
 baserunDir=$( realpath $baserunDir )
 
 rm -rf $runDir
-mkdir -p $runDir
+#mkdir -p $runDir
 
-ln -sf $workingDirectory/$mpasExecutable $runDir/$mpasExecutable
+eval "python testing_and_setup/atmosphere/setup_run_dir.py -a $runDir"
+
+#ln -sf $workingDirectory/$mpasExecutable $runDir/$mpasExecutable
 
 eval "mpasExecutable=\$( realpath \"$runDir/$mpasExecutable\" )"
 
@@ -212,11 +226,9 @@ eval "repo_timestamp=\$( git show --no-patch --format=%ci )"
 cd $runDir || exit $?
 # TODO: Clean up previous runs
 
-
-# Copy namelist
 echo "Setting $caseInputDir/namelist.atmosphere  as namelist.atmosphere "
-# TODO: remove old namelist.input which may be a symlink in which case this would have failed
-#rm namelist.input
+# Overwrite the following files from the defaults provided by setup_run_dir.py
+# to the ones provided by the caseInputDir
 cp $caseInputDir/namelist.atmosphere namelist.atmosphere || exit $?
 cp $caseInputDir/streams.atmosphere streams.atmosphere || exit $?
 cp $caseInputDir/stream_list.atmosphere.output stream_list.atmosphere.output || exit $?
@@ -269,10 +281,6 @@ elif [ "$testcase" = "conus" ]; then
     restart_compare_time='2019-09-01_00.20.00'
     cp $caseInputDir/stream_list.atmosphere.diagnostics . || exit $?
     cp $caseInputDir/stream_list.atmosphere.surface . || exit $?
-    ln -sf $workingDirectory/*.TBL . || exit $?
-    ln -sf $workingDirectory/*.DBL . || exit $?
-    ln -sf $caseInputDir/*.DBL . || exit $?
-    ln -sf $workingDirectory/*_DATA . || exit $?
 fi
 
 
