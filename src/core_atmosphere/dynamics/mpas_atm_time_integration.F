@@ -16,6 +16,12 @@
 
 module atm_time_integration
 
+   !USE m_ser_mpas, ONLY: mpas_set_serializer, mpas_set_savepoint
+   !USE m_serialize, ONLY: fs_add_savepoint_metainfo, fs_read_field, fs_create_savepoint, fs_write_field
+   USE utils_ppser, ONLY: ppser_set_mode, ppser_initialize, ppser_get_mode, ppser_savepoint, &
+       ppser_serializer, ppser_serializer_ref, ppser_intlength, ppser_reallength, &
+       ppser_realtype, ppser_zrperturb
+   !use mpas_timekeeping
    use mpas_derived_types
    use mpas_pool_routines
    use mpas_kind_types
@@ -208,6 +214,10 @@ module atm_time_integration
 
       type (domain_type), intent(inout) :: domain
 
+      type (mpas_pool_type), pointer :: diag, state
+      real (kind=RKIND), dimension(:,:), pointer :: u_1, ru
+      integer :: my_proc_id
+
 #ifdef MPAS_CAM_DYCORE
       ! Used in allocating scratch fields for physics tendencies
       type (mpas_pool_type), pointer :: tend_physics
@@ -273,6 +283,10 @@ module atm_time_integration
       real (kind=RKIND), dimension(:), pointer :: meshScalingDel2
       real (kind=RKIND), dimension(:), pointer :: meshScalingDel4
 #endif
+
+      my_proc_id = domain % dminfo % my_proc_id
+      ! !$ser init directory='./ser_data' prefix='mpas_dycore-cpu' mpi_rank=my_proc_id
+      !$ser init directory='./ser_data' prefix='mpas_dycore-cpu'
 
 #ifdef MPAS_CAM_DYCORE
       nullify(tend_physics)
@@ -457,6 +471,20 @@ module atm_time_integration
       call mpas_pool_get_array(mesh, 'meshScalingDel4', meshScalingDel4)
       !$acc enter data copyin(meshScalingDel4)
 #endif
+
+
+      nullify(diag)
+      call mpas_pool_get_subpool(domain % blocklist % structs, 'diag', diag)
+      nullify(state)
+      call mpas_pool_get_subpool(domain % blocklist % structs, 'state', state)
+      call mpas_pool_get_array(diag, 'ru', ru)
+      call mpas_pool_get_array(state, 'u', u_1, 1)
+
+      !!$ser savepoint atm_init
+      !!$ser mode write
+      !!$ser data u=u_1
+      !!$ser data ru=ru
+
 
    end subroutine mpas_atm_dynamics_init
 
@@ -764,7 +792,8 @@ module atm_time_integration
       type (mpas_pool_type), pointer :: state
       character (len=StrKIND), pointer :: config_time_integration
       logical, pointer :: config_apply_lbcs_ptr
-
+      character(len=StrKIND) :: timeStamp
+      character(len=StrKIND) :: savepoint_name
 
       clock => domain % clock
       block => domain % blocklist
@@ -775,7 +804,7 @@ module atm_time_integration
       config_apply_lbcs = config_apply_lbcs_ptr
 
       if (trim(config_time_integration) == 'SRK3') then
-         call atm_srk3(domain, dt, itimestep, exchange_halo_group)
+         call atm_srk3(domain, dt, itimestep, exchange_halo_group, nowTime)
       else
          call mpas_log_write('Unknown time integration option '//trim(config_time_integration), messageType=MPAS_LOG_ERR)
          call mpas_log_write('Currently, only ''SRK3'' is supported.', messageType=MPAS_LOG_CRIT)
@@ -800,7 +829,7 @@ module atm_time_integration
    end subroutine atm_timestep
 
 
-   subroutine atm_srk3(domain, dt, itimestep, exchange_halo_group)
+   subroutine atm_srk3(domain, dt, itimestep, exchange_halo_group, nowTime)
    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
    ! Advance model state forward in time by the specified time step using 
    !   time-split RK3 scheme
@@ -820,6 +849,7 @@ module atm_time_integration
       real (kind=RKIND), intent(in) :: dt
       integer, intent(in) :: itimestep
       procedure (halo_exchange_routine) :: exchange_halo_group
+      type (MPAS_Time_type), intent(in) :: nowTime
 
       integer :: thread
       integer :: iCell, k, iEdge
@@ -852,6 +882,7 @@ module atm_time_integration
       logical, pointer :: config_monotonic
       character (len=StrKIND), pointer :: config_microp_scheme
       character (len=StrKIND), pointer :: config_convection_scheme
+      character (len=StrKIND) :: xtime_new
 
       integer, pointer :: index_qv, nCellsSolve, nVertices_ptr, nVerticesSolve
       integer, pointer :: nCells_ptr, nEdges_ptr, nEdgesSolve_ptr
@@ -882,7 +913,12 @@ module atm_time_integration
 
       real (kind=RKIND)  :: time_dyn_step
       logical, parameter :: debug = .false.
+      integer :: proc_id 
 
+      proc_id = domain % dminfo % my_proc_id
+
+      call mpas_get_time(nowTime, dateTimeString=xtime_new)
+      !$ser savepoint atm_srk3 datetime=xtime_new
 
       !
       ! Retrieve configuration options
@@ -1043,10 +1079,12 @@ module atm_time_integration
       call exchange_halo_group(domain, 'dynamics:theta_m,scalars,pressure_p,rtheta_p')
 
       call mpas_timer_start('atm_rk_integration_setup')
+      
+      !$ser savepoint atm_rk_int_setup datetime=xtime_new
 
 !$OMP PARALLEL DO
       do thread=1,nThreads
-         call atm_rk_integration_setup(state, diag, nVertLevels, num_scalars, &
+         call atm_rk_integration_setup(domain, state, diag, nVertLevels, num_scalars, &
                                        cellThreadStart(thread), cellThreadEnd(thread), &
                                        vertexThreadStart(thread), vertexThreadEnd(thread), &
                                        edgeThreadStart(thread), edgeThreadEnd(thread), &
@@ -1059,6 +1097,8 @@ module atm_time_integration
       call mpas_timer_stop('atm_rk_integration_setup')
 
       call mpas_timer_start('atm_compute_moist_coefficients')
+
+      !$ser savepoint moist_coeff datetime=xtime_new
 
 !$OMP PARALLEL DO
       do thread=1,nThreads
@@ -1108,6 +1148,7 @@ module atm_time_integration
          !  Compute the coefficients for the vertically implicit solve in the acoustic step.
          !  These coefficients will work for the first acoustic step in all cases.
          call mpas_timer_start('atm_compute_vert_imp_coefs')
+      !$ser savepoint vert_imp_coeff1 datetime=xtime_new dyn_substep=dynamics_substep
 
          rk_step = 1
 !$OMP PARALLEL DO
@@ -1135,6 +1176,8 @@ module atm_time_integration
 
               !  Compute the coefficients for the vertically implicit solve in the acoustic step.
               !  These coefficients will work for the 2nd and 3rd acoustic steps (dt is the same for both).
+               
+               !$ser savepoint vert_imp_coeff2 datetime=xtime_new dyn_substep=dynamics_substep rk_step=rk_step
 !$OMP PARALLEL DO
               do thread=1,nThreads
                  call atm_compute_vert_imp_coefs( state, mesh, diag, block % configs, nVertLevels, rk_sub_timestep(rk_step), &
@@ -1168,6 +1211,8 @@ module atm_time_integration
                dpdz(k,nCells+1) = 0.0_RKIND
             end do
             !$acc end parallel
+
+            !$ser savepoint dyn_tend datetime=xtime_new dyn_substep=dynamics_substep rk_step=rk_step
 
 !$OMP PARALLEL DO
             do thread=1,nThreads
@@ -1203,6 +1248,8 @@ module atm_time_integration
             call exchange_halo_group(domain, 'dynamics:tend_u')
    
             call mpas_timer_start('small_step_prep')
+   
+         !$ser savepoint smlstep_pert datetime=xtime_new dyn_substep=dynamics_substep rk_step=rk_step
    
 !$OMP PARALLEL DO
             do thread=1,nThreads
@@ -1512,6 +1559,7 @@ module atm_time_integration
          !  Notes:  physics tendencies for scalars should be OK coming out of dynamics
 
          call mpas_timer_start('atm_rk_dynamics_substep_finish')
+         !$ser savepoint dynamics_substep_finish datetime=xtime_new dyn_substep=dynamics_substep
 
 !$OMP PARALLEL DO
          do thread=1,nThreads
@@ -1927,17 +1975,20 @@ module atm_time_integration
    end subroutine advance_scalars
 
 
-   subroutine atm_rk_integration_setup( state, diag, nVertLevels, num_scalars, &
+   subroutine atm_rk_integration_setup(domain, state, diag, nVertLevels, num_scalars, &
                                    cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
                                    cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd)
 
-      implicit none
+      use SMIOLf, only: SMIOLf_put_var_serialbox
+   
 
+      implicit none
+      type (domain_type), intent(inout) :: domain
       type (mpas_pool_type), intent(inout) :: state
       type (mpas_pool_type), intent(inout) :: diag
       integer, intent(in) :: nVertLevels, num_scalars, cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd
       integer, intent(in) :: cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd
-      integer :: iCell, iEdge, j, k
+      integer :: iCell, iEdge, j, k, ierr
 
       real (kind=RKIND), dimension(:,:), pointer :: ru
       real (kind=RKIND), dimension(:,:), pointer :: ru_save
@@ -1954,6 +2005,10 @@ module atm_time_integration
       real (kind=RKIND), dimension(:,:), pointer :: theta_m_1, theta_m_2
       real (kind=RKIND), dimension(:,:), pointer :: rho_zz_1, rho_zz_2
       real (kind=RKIND), dimension(:,:,:), pointer :: scalars_1, scalars_2
+      type (SMIOLf_decomp), pointer :: smiol_decomp => null()
+      type (SMIOLf_file), pointer :: smiol_file => null()
+
+      integer :: threadNum
 
       call mpas_pool_get_array(diag, 'ru', ru)
       call mpas_pool_get_array(diag, 'ru_save', ru_save)
@@ -2035,8 +2090,171 @@ module atm_time_integration
       !$acc            delete(ru, rw, rtheta_p, rho_p, u_1, w_1, theta_m_1, &
       !$acc                  rho_zz_1, scalars_1)
       MPAS_ACC_TIMER_STOP('atm_rk_integration_setup [ACC_data_xfer]')
+      
+      ! call get_smiol_decomp_file_from_stream_and_field(domain % streamManager, 'restart', &
+      !                                            'ru', smiol_file, smiol_decomp, ierr)
+      
+      ! if (ierr /= 0) then
+      !    call mpas_log_write('atm_rk_integration_setup: Could not get SMIOL decomposition for variable "ru"', MPAS_LOG_ERR)
+      !    return
+      ! end if
+      
+      ! ierr = SMIOLf_put_var_serialbox(ppser_serializer, ppser_savepoint, 'ru_save_test1', &
+      !                                   smiol_file, 'ru', smiol_decomp, ru_save)
+      ! if (ierr /= 0) then
+      !     call mpas_log_write('SMIOLf_put_var_serialbox returned an error', MPAS_LOG_WARN)
+      ! end if
+
+      call serbox_write_var(domain, 'ru_save', 'ru', var_2d=ru_save)
+      call serbox_write_var(domain, 'rw_save', 'rw', var_2d=rw_save)
+      call serbox_write_var(domain, 'u_2', 'u', var_2d=u_2)
+      call serbox_write_var(domain, 'w_2', 'w', var_2d=w_2)
+      call serbox_write_var(domain, 'theta_m_2', 'theta_m', var_2d=theta_m_2)
+      call serbox_write_var(domain, 'rho_zz_2', 'theta_m', var_2d=rho_zz_2)
+      !call serbox_write_var(domain, 'scalars_2', 'scalars', var_3d=scalars_2)
+
+      !!$ser data ru_save=ru_save
+      !!$ser data rw_save=rw_save
+      !!$ser data u_2=u_2
+      !!$ser data w_2=w_2
+      !!$ser data theta_m_2=theta_m_2
+      !!$ser data rho_zz_2=rho_zz_2
+      !!$ser data scalars_2=scalars_2
 
    end subroutine atm_rk_integration_setup
+
+   ! call serbox_write_var(domain, ru_save, 'ru_save_test1', 'ru')
+
+   !    contains
+
+      subroutine serbox_write_var(domain, var_out_name, similar_var_in_restart, var_1d, var_2d, var_3d)
+         use mpas_derived_types, only : domain_type
+         use SMIOLf, only: SMIOLf_put_var_serialbox
+
+         implicit none
+
+         type(domain_type), intent(inout) :: domain
+         character(len=*), intent(in) :: var_out_name
+         character(len=*), intent(in) :: similar_var_in_restart
+         ! real(kind=RKIND), dimension(:), pointer, optional :: var_1d
+         ! real(kind=RKIND), dimension(:,:), pointer, optional :: var_2d
+         ! real(kind=RKIND), dimension(:,:,:), pointer, optional :: var_3d
+         real(kind=RKIND), dimension(:), intent(in), target, optional :: var_1d
+         real(kind=RKIND), dimension(:,:), intent(in), target, optional :: var_2d
+         real(kind=RKIND), dimension(:,:,:), intent(in), target, optional :: var_3d
+
+
+         real(kind=RKIND), dimension(:), pointer :: var_1d_p
+         real(kind=RKIND), dimension(:,:), pointer :: var_2d_p
+         real(kind=RKIND), dimension(:,:,:), pointer :: var_3d_p
+         
+
+         type(SMIOLf_file), pointer :: smiol_file
+         type(SMIOLf_decomp), pointer :: smiol_decomp
+         integer :: ierr
+
+         call get_smiol_decomp_file_from_stream_and_field(domain % streamManager, 'restart', &
+                   trim(similar_var_in_restart), smiol_file, smiol_decomp, ierr)
+
+         if (ierr /= 0) then
+            call mpas_log_write('write_var_to_restart: Could not get SMIOL decomposition for variable '//trim(similar_var_in_restart), MPAS_LOG_ERR)
+            return
+         end if
+
+         if (present(var_1d)) then
+            var_1d_p => var_1d
+            ierr = SMIOLf_put_var_serialbox(ppser_serializer, ppser_savepoint, trim(var_out_name), &
+                   smiol_file, trim(similar_var_in_restart), smiol_decomp, var_1d_p)
+         else if (present(var_2d)) then
+            var_2d_p => var_2d
+            ierr = SMIOLf_put_var_serialbox(ppser_serializer, ppser_savepoint, trim(var_out_name), &
+                   smiol_file, trim(similar_var_in_restart), smiol_decomp, var_2d_p)
+         else if (present(var_3d)) then
+            var_3d_p => var_3d
+            ierr = SMIOLf_put_var_serialbox(ppser_serializer, ppser_savepoint, trim(var_out_name), &
+                   smiol_file, trim(similar_var_in_restart), smiol_decomp, var_3d_p)
+         end if
+         
+         if (ierr /= 0) then
+            call mpas_log_write('SMIOLf_put_var_serialbox returned an error', MPAS_LOG_WARN)
+         end if
+      end subroutine serbox_write_var
+
+
+   subroutine get_smiol_decomp_file_from_stream_and_field(streamManager, streamID, fieldname, smiol_file, smiol_decomp, ierr)
+
+      use mpas_derived_types, only : MPAS_streamManager_type, SMIOLf_decomp
+      use mpas_stream_list, only: MPAS_stream_list_query
+      implicit none
+
+      type (MPAS_streamManager_type), pointer :: streamManager
+      character(len=*), intent(in) :: streamID
+      character(len=*), intent(in) :: fieldname
+      type (SMIOLf_decomp), pointer :: smiol_decomp
+      type (SMIOLf_file), pointer :: smiol_file
+      integer, intent(out), optional :: ierr
+      type(MPAS_stream_list_type), pointer :: matching_streams
+      type(MPAS_stream_list_type), pointer :: stream_cursor
+      type (MPAS_stream_type), pointer :: loc_stream
+      type (fieldlist_type), pointer :: field_cursor
+
+      integer :: ierr_local
+
+      ierr_local = 0
+      nullify(loc_stream)
+      nullify(matching_streams)
+      call mpas_log_write('hello before list_query', flushNow=.true.)
+      if(.not. MPAS_stream_list_query(streamManager % streams, streamID, matching_streams, ierr=ierr_local)) then
+         call mpas_log_write('get_smiol_decomp_from_stream_and_field: ' // trim(streamID) // ' not found in stream list', &
+                             MPAS_LOG_CRIT)
+      end if
+      call mpas_log_write('hello after list_query', flushNow=.true.)
+      call mpas_log_write('-- Handling write of stream '//trim(matching_streams % name))
+
+
+      if (ierr_local /= 0) then
+         call mpas_log_write('2222 2get_smiol_decomp_from_stream_and_field: ' // trim(streamID) // ' not found in stream list', &
+                             MPAS_LOG_CRIT)
+      end if
+      !stream_cursor => matching_streams % head
+      if (.not. associated(matching_streams)) then
+         call mpas_log_write('matching_streams is empty', flushNow=.true.)
+      end if
+      loc_stream => matching_streams % stream
+
+      if (.not. associated(loc_stream)) then
+         call mpas_log_write('loc_stream is empty', flushNow=.true.)
+      end if
+      if (.not. associated(loc_stream % fileHandle % fieldlist_head)) then
+         call mpas_log_write('loc_stream % fileHandle % fieldlist_head  is empty', flushNow=.true.)
+      end if
+
+      smiol_file => loc_stream % fileHandle % smiol_file
+      if (.not. associated(smiol_file)) then
+         call mpas_log_write('smiol_file is empty', flushNow=.true.)
+      end if
+
+      field_cursor => loc_stream % fileHandle % fieldlist_head
+      do while (associated(field_cursor))
+         if (trim(fieldname) == trim(field_cursor % fieldhandle % fieldname)) then
+            exit
+         end if
+         field_cursor => field_cursor % next
+      end do
+
+      if (.not. associated(field_cursor)) then
+         call mpas_log_write('get_smiol_decomp_from_stream_and_field: ' // trim(fieldname) // ' not found in field cursor ', &
+                             MPAS_LOG_ERR)
+      end if
+
+      smiol_decomp => field_cursor % fieldhandle % decomp % smiol_decomp
+
+      if (.not. associated(smiol_decomp)) then
+         call mpas_log_write('smiol_decomp: is not associated ', MPAS_LOG_ERR)
+      end if
+
+
+   end subroutine get_smiol_decomp_file_from_stream_and_field
 
 
    subroutine atm_compute_moist_coefficients( dims, state, diag, mesh, &
@@ -2143,6 +2361,8 @@ module atm_time_integration
       !$acc           delete(scalars)
       MPAS_ACC_TIMER_STOP('atm_compute_moist_coefficients [ACC_data_xfer]')
 
+      !!$ser data cqw=cqw
+      !!$ser data cqu=cqu
    end subroutine atm_compute_moist_coefficients
 
 
@@ -2363,6 +2583,8 @@ module atm_time_integration
       !$acc exit data delete(cqw, p, t, rb, rtb, rt, pb)
       MPAS_ACC_TIMER_STOP('atm_compute_vert_imp_coefs_work [ACC_data_xfer]')
 
+      !!$ser data alpha_tri=alpha_tri
+      !!$ser data gamma_tri=gamma_tri
    end subroutine atm_compute_vert_imp_coefs_work
 
 
@@ -3415,6 +3637,11 @@ module atm_time_integration
 
       end do
       !$acc end parallel
+
+      !!$ser mode write
+      !!$ser accdata ru=ru
+      ! $ser accdata u=u
+      ! $ser accdata ruAvg_2=ruAvg
 
       MPAS_ACC_TIMER_START('atm_recover_large_step_variables [ACC_data_xfer]')
       !$acc exit data delete(rho_p_save,rho_pp,rho_base,rw_save,rw_p, &
@@ -6235,6 +6462,12 @@ module atm_time_integration
 #ifdef CURVATURE
       !$acc exit data delete(ur_cell, vr_cell)
 #endif
+
+      !!$ser data tend_u=tend_u
+      !!$ser data tend_w=tend_w
+      !!$ser data tend_theta=tend_theta
+      !!$ser data h_divergence=h_divergence
+      !!$ser data rthdynten=rthdynten
       MPAS_ACC_TIMER_STOP('atm_compute_dyn_tend_work [ACC_data_xfer]')
 
    end subroutine atm_compute_dyn_tend_work
@@ -7187,6 +7420,17 @@ module atm_time_integration
       !$acc            delete(ru, u_2, rtheta_p, rho_p, theta_m_2, rho_zz_2, rw, &
       !$acc                  w_2, rho_zz_old_split)
       MPAS_ACC_TIMER_STOP('atm_rk_dynamics_substep_finish [ACC_data_xfer]')
+
+      !!$ser data rtheta_p_save=rtheta_p_save
+      !!$ser data rho_p_save=rho_p_save
+      !!$ser data ru_save=ru_save
+      !!$ser data rw_save=rw_save
+      !!$ser data u_1=u_1
+      !!$ser data w_1=w_1
+      !!$ser data theta_m_1=theta_m_1
+      !!$ser data ruAvg=ruAvg
+      !!$ser data rho_zz_1=rho_zz_1
+      !!$ser data wwAvg=wwAvg
 
    end subroutine atm_rk_dynamics_substep_finish
 

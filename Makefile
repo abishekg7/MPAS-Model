@@ -19,11 +19,11 @@ gnu:   # BUILDTARGET GNU Fortran, C, and C++ compilers
 	"FFLAGS_OPT = -std=f2008 -O3 -ffree-line-length-none -fconvert=big-endian -ffree-form" \
 	"CFLAGS_OPT = -O3" \
 	"CXXFLAGS_OPT = -O3" \
-	"LDFLAGS_OPT = -O3" \
+	"LDFLAGS_OPT = -O3 -Wl,--copy-dt-needed-entries" \
 	"FFLAGS_DEBUG = -std=f2008 -g -ffree-line-length-none -fconvert=big-endian -ffree-form -fcheck=all -fbacktrace -ffpe-trap=invalid,zero,overflow" \
 	"CFLAGS_DEBUG = -g" \
 	"CXXFLAGS_DEBUG = -g" \
-	"LDFLAGS_DEBUG = -g" \
+	"LDFLAGS_DEBUG = -g -Wl,--copy-dt-needed-entries" \
 	"FFLAGS_OMP = -fopenmp" \
 	"CFLAGS_OMP = -fopenmp" \
 	"FFLAGS_ACC =" \
@@ -147,7 +147,7 @@ nvhpc:   # BUILDTARGET NVIDIA HPC SDK
 	"CC_SERIAL = nvc" \
 	"CXX_SERIAL = nvc++" \
 	"FFLAGS_PROMOTION = -r8" \
-	"FFLAGS_OPT = -gopt -O4 -byteswapio -Mfree" \
+	"FFLAGS_OPT = -gopt -O4 -byteswapio -Mfree -Mnofma" \
 	"CFLAGS_OPT = -gopt -O3" \
 	"CXXFLAGS_OPT = -gopt -O3" \
 	"LDFLAGS_OPT = -gopt -O3" \
@@ -759,6 +759,19 @@ endif
 	LIBS += $(NCLIB)
 endif
 
+
+export SERIALBOX_ROOT=/glade/derecho/scratch/agopal/seriablbox_2.6.2_gcc
+export BOOST_ROOT=/glade/derecho/scratch/agopal/boost_1_86_0
+
+FCINCLUDES += -I$(SERIALBOX_ROOT)/install_gcc/include \
+           -I$(SERIALBOX_ROOT)/src \
+            -I$(BOOST_ROOT)/install_gcc/include -DSERIALIZE
+
+SERLIB = libsimple_m_ser.a
+
+LIBS +=  $(SERIALBOX_ROOT)/install_gcc/lib/libSerialboxFortran.a \
+           $(SERIALBOX_ROOT)/install_gcc/lib/libSerialboxC.a $(SERIALBOX_ROOT)/install_gcc/lib/libSerialboxCore.a \
+          -L/opt/cray/pe/gcc/12.2.0/snos/lib64/ 
 
 ifneq "$(PNETCDF)" ""
 ifneq ($(wildcard $(PNETCDF)/lib/libpnetcdf.*), )

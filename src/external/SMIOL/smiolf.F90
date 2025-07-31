@@ -6,6 +6,8 @@
 module SMIOLf
 
     use iso_c_binding, only : c_int, c_size_t, c_int64_t, c_ptr
+    use m_serialize
+
 
     private
 
@@ -25,6 +27,7 @@ module SMIOLf
               SMIOLf_define_var, &
               SMIOLf_inquire_var, &
               SMIOLf_put_var, &
+              SMIOLf_put_var_serialbox, &
               SMIOLf_get_var, &
               SMIOLf_define_att, &
               SMIOLf_inquire_att, &
@@ -40,6 +43,7 @@ module SMIOLf
 
 
     integer, parameter :: SMIOL_offset_kind = c_int64_t   ! Must match SMIOL_Offset in smiol_types.h
+   integer, parameter :: RKIND  = selected_real_kind(6)
 
 
     type, bind(C) :: SMIOLf_context
@@ -139,6 +143,23 @@ module SMIOLf
         module procedure SMIOLf_put_var_5d_real64
     end interface SMIOLf_put_var
 
+    interface SMIOLf_put_var_serialbox
+        module procedure SMIOLf_put_var_serialbox_1d_int32
+        module procedure SMIOLf_put_var_serialbox_1d_real32
+        module procedure SMIOLf_put_var_serialbox_1d_real64
+        module procedure SMIOLf_put_var_serialbox_2d_int32
+        module procedure SMIOLf_put_var_serialbox_2d_real32
+        module procedure SMIOLf_put_var_serialbox_2d_real64
+        module procedure SMIOLf_put_var_serialbox_3d_int32
+        module procedure SMIOLf_put_var_serialbox_3d_real32
+        module procedure SMIOLf_put_var_serialbox_3d_real64
+        module procedure SMIOLf_put_var_serialbox_4d_int32
+        module procedure SMIOLf_put_var_serialbox_4d_real32
+        module procedure SMIOLf_put_var_serialbox_4d_real64
+        module procedure SMIOLf_put_var_serialbox_5d_real32
+        module procedure SMIOLf_put_var_serialbox_5d_real64
+    end interface SMIOLf_put_var_serialbox
+
     !
     ! Note: The implementations of the specific SMIOLf_get_var routines
     !       are found in the file smiolf_put_get_var.inc, which is included
@@ -192,6 +213,20 @@ module SMIOLf
              use iso_c_binding, only : c_ptr, c_char, c_int
              type (c_ptr), value :: file
              character (kind=c_char), dimension(*) :: varname
+             type (c_ptr), value :: decomp
+             type (c_ptr), value :: buf
+             integer (kind=c_int) :: ierr
+        end function
+
+        function SMIOL_put_var_serialbox(serializer, savepoint, fieldname, &
+                               c_type, smiol_file, smiol_varname, decomp, buf) &
+                               result(ierr) bind(C, name='SMIOL_put_var_serialbox')
+             use iso_c_binding, only : c_ptr, c_char, c_int
+             TYPE(C_PTR), INTENT(IN), VALUE       :: serializer, savepoint
+             CHARACTER(KIND=C_CHAR), DIMENSION(*) :: fieldname
+             INTEGER(C_INT), INTENT(IN), VALUE    :: c_type
+             type (c_ptr), value :: smiol_file
+             character (kind=c_char), dimension(*) :: smiol_varname
              type (c_ptr), value :: decomp
              type (c_ptr), value :: buf
              integer (kind=c_int) :: ierr
@@ -951,6 +986,7 @@ contains
 
 
 #include "smiolf_put_get_var.inc"
+#include "smiolf_put_var_serialbox.inc"
 
 
     !

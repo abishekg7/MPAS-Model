@@ -372,6 +372,7 @@ module atm_core
       use mpas_vector_reconstruction
       use mpas_stream_manager
       use mpas_atm_boundaries, only : mpas_atm_setup_bdy_masks
+      use mpas_dmpar, only : IO_NODE
 #ifdef DO_PHYSICS
 !     use mpas_atmphys_aquaplanet
       use mpas_atmphys_control
@@ -594,6 +595,9 @@ module atm_core
       call mpas_pool_get_array(mesh, 'meshScalingDel2', meshScalingDel2)
       call mpas_pool_get_array(mesh, 'meshScalingDel4', meshScalingDel4)
 
+      if (dminfo % my_proc_id == IO_NODE) then
+         call mpas_log_write('I am IO_NODE')
+      end if
       call mpas_log_write('min/max of meshScalingDel2 = $r $r', &
                           realArgs=(/minval(meshScalingDel2(1:nEdgesSolve)), maxval(meshScalingDel2(1:nEdgesSolve))/))
       call mpas_log_write('min/max of meshScalingDel4 = $r $r', &
@@ -684,6 +688,8 @@ module atm_core
       call mpas_timer_start('stream_output')
       call mpas_dmpar_get_time(output_start_time)
       call mpas_stream_mgr_write(domain % streamManager, ierr=ierr)
+      call mpas_stream_mgr_write(domain % streamManager, 'restart', forceWriteNow=.true., ierr=ierr)
+
       call mpas_dmpar_get_time(output_stop_time)
       call mpas_timer_stop('stream_output')
       if (ierr /= MPAS_STREAM_MGR_NOERR .and. &

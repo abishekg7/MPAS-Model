@@ -17,7 +17,7 @@ clean:
 %.o : %.mod
 
 %.o : %.F90
-	$(FC) $(CPPINCLUDES) $(FFLAGS) -c $<
+	$(FC) $(FCINCLUDES) $(CPPINCLUDES) $(FFLAGS) -c $<
 
 %.o : %.c
 	$(CC) $(CPPINCLUDES) $(CFLAGS) -c $<

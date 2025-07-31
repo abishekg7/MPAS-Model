@@ -7,6 +7,10 @@
 #include "smiol.h"
 #include "smiol_utils.h"
 
+#ifdef SERIALIZE
+#include "serialbox-c/Serialbox.h"
+#endif
+
 #ifdef SMIOL_PNETCDF
 #include "pnetcdf.h"
 #define PNETCDF_DEFINE_MODE 0
@@ -1320,6 +1324,251 @@ int SMIOL_put_var(struct SMIOL_file *file, const char *varname,
 	free(count);
 
 	return SMIOL_SUCCESS;
+}
+
+
+int SMIOL_put_var_serialbox(void* serializer, const void* savepoint, const char* name, int ctype, struct SMIOL_file *file,
+                  			const char *varname, const struct SMIOL_decomp *decomp, const void *buf)
+{
+
+	int ierr=0;
+	int ndims;
+	size_t element_size;
+	size_t basic_size;
+	int has_unlimited_dim;
+	void *out_buf = NULL;
+	int comm_rank;
+	size_t *start;
+	size_t *count;
+	SMIOL_Offset *dimsizes;
+	int iSize, jSize, kSize, lSize;
+	int istride, jstride, kstride, lstride;
+
+	void *agg_buf = NULL;
+	const void *agg_buf_cnst = NULL;
+
+	/*
+	 * Basic checks on arguments
+	 */
+	if (file == NULL || varname == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	/*
+	 * Work out the start[] and count[] arrays for writing this variable
+	 * in parallel
+	 */
+	ierr = build_start_count(file, varname, decomp,
+	                         START_COUNT_WRITE, &element_size, &basic_size, &ndims,
+	                         &has_unlimited_dim,
+	                         &start, &count);
+
+	if (ierr != SMIOL_SUCCESS) {
+		return ierr;
+	}
+
+
+	switch(ndims) {
+		case 1:
+			iSize = (int)count[0];
+			istride = 1;
+			jstride = -1;
+			kstride = -1;
+			lstride = -1;
+			jSize = 0;
+			kSize = 0;
+			lSize = 0;
+			break;
+		case 2:
+			if (has_unlimited_dim) {
+				iSize = (int)count[1];
+				jSize = 0;
+				kSize = 0;
+				lSize = 0;
+				jstride = -1;
+			} else {
+				// fill in
+				jstride = iSize;;
+			}
+			istride = 1;			
+			kSize = -1;
+			lSize = -1;
+
+			break;
+		case 3:
+			if (has_unlimited_dim) {
+				iSize = (int)count[2];
+				jSize = (int)count[1];
+				kSize = 0;
+				lSize = 0;
+				kstride = -1;
+			}
+			else {
+				iSize = (int)count[3];
+				jSize = (int)count[2];
+				kSize = (int)count[1];
+				lSize = 0;
+				kstride = iSize * jSize;
+			}
+			
+			istride = 1;
+			jstride = iSize;			
+			lstride = -1;
+			break;
+		case 4:
+			if (has_unlimited_dim) {
+				iSize = (int)count[3];
+				jSize = (int)count[2];
+				kSize = (int)count[1];
+				lSize = 0;
+				kstride = iSize * jSize;
+			}
+			else {
+				kstride = iSize * jSize * kSize;
+			}
+			istride = 1;
+			jstride = iSize;
+			kstride = iSize * jSize;
+			lstride = -1;
+			break;
+		default:
+			fprintf(stderr, "Error: ndims %i not supported \n", ndims);
+			
+	}
+	
+
+	/*
+	 * Communicate elements of this field from MPI ranks that compute those
+	 * elements to MPI ranks that write those elements. This only needs to
+	 * be done for decomposed variables.
+	 */
+	if (decomp) {
+		out_buf = malloc(element_size * decomp->io_count);
+		if (out_buf == NULL) {
+			
+			return SMIOL_MALLOC_FAILURE;
+		}
+
+		if (decomp->agg_factor != 1) {
+			MPI_Datatype dtype;
+			MPI_Comm agg_comm;
+
+			agg_comm = MPI_Comm_f2c(decomp->agg_comm);
+			MPI_Comm_rank(agg_comm, &comm_rank);
+
+			ierr = MPI_Type_contiguous((int)element_size,
+			                           MPI_UINT8_T, &dtype);
+			if (ierr != MPI_SUCCESS) {
+				fprintf(stderr, "MPI_Type_contiguous failed with code %i\n", ierr);
+				return SMIOL_MPI_ERROR;
+			}
+
+			ierr = MPI_Type_commit(&dtype);
+			if (ierr != MPI_SUCCESS) {
+				fprintf(stderr, "MPI_Type_commit failed with code %i\n", ierr);
+				return SMIOL_MPI_ERROR;
+			}
+
+			agg_buf = malloc(element_size * decomp->n_compute_agg);
+			if (agg_buf == NULL && decomp->n_compute_agg > 0) {
+				return SMIOL_MALLOC_FAILURE;
+			}
+
+			
+
+			ierr = MPI_Gatherv((const void *)buf,
+			                   (int)decomp->n_compute, dtype,
+			                   (void *)agg_buf,
+			                   (const int *)decomp->counts,
+			                   (const int *)decomp->displs,
+			                   dtype, 0, agg_comm);
+			if (ierr != MPI_SUCCESS) {
+				fprintf(stderr, "MPI_Gatherv failed with code %i\n", ierr);
+				return SMIOL_MPI_ERROR;
+			}
+
+			ierr = MPI_Type_free(&dtype);
+			if (ierr != MPI_SUCCESS) {
+				fprintf(stderr, "MPI_Type_free failed with code %i\n", ierr);
+				return SMIOL_MPI_ERROR;
+			}
+
+			agg_buf_cnst = agg_buf;
+		} else {
+			agg_buf_cnst = buf;
+		}
+
+		ierr = transfer_field(decomp, SMIOL_COMP_TO_IO,
+		                      element_size, agg_buf_cnst, out_buf);
+		if (ierr != SMIOL_SUCCESS) {
+			fprintf(stderr, "transfer_field failed with code %i\n", ierr);
+			free(out_buf);
+			return ierr;
+		}
+
+		if (decomp->agg_factor != 1) {
+			free(agg_buf);
+		}
+	}
+
+/* TO DO: could check that out_buf has size zero if not file->io_task */
+
+	/*
+	 * Write out_buf
+	 */
+	
+
+	//serialboxSerializerWrite(serializer, "phi", savepoint_in, out_buf, strides, 2);	
+
+	if (comm_rank == 0) {
+
+			fprintf(stderr, "inside.. comm_rank %i element_size: %i decomp->io_count: %i\n", comm_rank, element_size, decomp->io_count);
+			fprintf(stderr, "inside.. comm_rank %i decomp->n_compute: %i decomp->n_compute_agg: %i\n", comm_rank, decomp->n_compute, decomp->n_compute_agg);
+			fprintf(stderr, "inside.. comm_rank %i decomp->displs: %i decomp->counts: %i\n", comm_rank,decomp->displs,decomp->counts);
+
+			fprintf(stderr, "isize %i jsize %i ksize %i lsize: %i \n", iSize, jSize, kSize, lSize);
+			fprintf(stderr, "istride %i jstride %i kstride %i lstride: %i \n", istride, jstride, kstride, lstride);
+
+		for (int i = 0; i < ndims; i++) {
+			fprintf(stderr, "start[%i] = %i \n", i, (int)start[i]);		
+			fprintf(stderr, "count[%i] = %i \n", i, (int)count[i]);
+		}
+		ierr = serialboxFortranSerializerRegisterField(serializer, name, ctype,
+                                             basic_size, iSize, jSize, kSize, lSize,
+											 0, 0, 0, 0, 0, 0, 0, 0);
+
+		if (ierr != 0) {
+			fprintf(stderr, "comm_rank %i  serialboxFortranSerializerRegisterField failed \n",comm_rank);
+		} else {
+			fprintf(stderr, "comm_rank %i  serialboxFortranSerializerRegisterField succeeded \n",comm_rank);
+		}
+
+		// serialboxFortranComputeStrides(serializer, name, const void* basePtr,
+        //                             const void* iplus1, const void* jplus1, const void* kplus1,
+        //                             const void* lplus1, &istride, &jstride, &kstride, &lstride);
+
+		fprintf(stderr, "comm_rank %i  serialboxFortranSerializerWrite called \n",comm_rank);
+		ierr = serialboxFortranSerializerWrite(serializer, savepoint, name,
+	                               out_buf, istride, jstride, kstride, lstride);
+
+		if (ierr != MPI_SUCCESS) {
+			fprintf(stderr, "comm_rank %i  serialboxFortranSerializerWrite failed \n",comm_rank);
+		}else {
+			fprintf(stderr, "comm_rank %i  serialboxFortranSerializerWrite succeeded \n",comm_rank);
+		}
+	}
+	/*
+
+	 * Free up memory before returning
+	 */
+	if (decomp) {
+		free(out_buf);
+	}
+
+	free(start);
+	free(count);
+
+	return ierr;
 }
 
 
