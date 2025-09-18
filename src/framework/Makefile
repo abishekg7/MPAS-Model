@@ -36,6 +36,8 @@ OBJS = mpas_kind_types.o \
        mpas_log.o \
        mpas_halo.o \
        mpas_string_utils.o \
+       mpas_ptscotch_interface.o \
+       ptscotch_interface.o \
        mpas_stream_inquiry.o \
        stream_inquiry.o
 
@@ -111,6 +113,8 @@ xml_stream_parser.o: xml_stream_parser.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(CPPINCLUDES) -I../external/ezxml -c xml_stream_parser.c
 
 mpas_halo.o: mpas_derived_types.o mpas_pool_routines.o mpas_log.o
+
+mpas_ptscotch_interface.o : mpas_derived_types.o mpas_dmpar.o mpas_log.o ptscotch_interface.o
 
 mpas_stream_inquiry.o : mpas_derived_types.o mpas_log.o mpas_c_interfacing.o
 
