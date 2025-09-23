@@ -4,78 +4,51 @@ module mpas_ptscotch_interface
 #include "ptscotchf.h"
     public :: scotch_dgraphinit, scotch_dgraphbuild
 
-    type, bind(c) :: my_scotch_graph_type
-      real(c_double) :: dummy (29)
-   end type
-
-
-type(my_scotch_graph_type), pointer :: my_scotch_dgraph => null()
-
     
 contains
 
     function scotch_dgraphinit(dgraph, comm) result(ierr)
-        use iso_c_binding, only : c_ptr, c_int, c_loc
+        use iso_c_binding, only : c_ptr, c_loc
         use mpas_log, only : mpas_log_write
-! #ifdef MPAS_USE_MPI_F08
-!         use mpi_f08, only : MPI_Comm
-! #endif
+        use mpas_derived_types, only : MPAS_LOG_CRIT
 
         implicit none
         ! Arguments
-        doubleprecision, target, intent(in) :: dgraph (29)
-! #ifdef MPAS_USE_MPI_F08
-!         type (MPI_Comm), intent(in) :: comm
-! #else
+        doubleprecision, target, intent(in) :: dgraph (SCOTCH_DGRAPHDIM)
         integer, intent(in) :: comm
-! #endif
 
         ! Return value
         integer :: ierr
-        integer :: i
-        type(c_ptr) :: dgraph_ptr
 
         interface
-            function scotchfdgraphinit(dgraph_ptr_1, localcomm) bind(C, name='scotchm_dgraphinit') result(err)
-            !function scotchfdgraphinit(localcomm) bind(C, name='scotchm_dgraphinit') result(err)
-                use iso_c_binding, only : c_ptr, c_int, c_double
-                !real(c_double), intent(in) :: dgraph_ptr_1 (29)
-                type(c_ptr), value :: dgraph_ptr_1
-                integer, intent(in), value :: localcomm
-                integer(kind=c_int) :: err
+            function scotchfdgraphinit(dgraph_ptr, localcomm) bind(C, name='scotchm_dgraphinit') result(err)
+                use iso_c_binding, only : c_ptr, c_int
+                type(c_ptr), value :: dgraph_ptr
+                integer(c_int), value :: localcomm
+                integer(c_int) :: err
             end function scotchfdgraphinit
         end interface
 
-
-        ierr = 0
-        !allocate(my_scotch_dgraph)
-
-        !my_scotch_dgraph%dummy[0] = -1
-
-        !dgraph_ptr = c_loc(my_scotch_dgraph)
-
-        call mpas_log_write('Initializing Distributed Scotch Graph')
-! #ifdef MPAS_USE_MPI_F08
-!         ierr = scotchfdgraphinit(dgraph_ptr, comm % mpi_val)
-! #else
         ierr = scotchfdgraphinit(c_loc(dgraph), comm)
-        !ierr = scotchfdgraphinit(c_loc(my_scotch_dgraph), comm)
-        !ierr = scotchfdgraphinit(comm)
-!#endif
+
+        if (ierr /= 0) then
+            call mpas_log_write('Error initalizing distributed Scotch graph')
+        else 
+            call mpas_log_write('Successfully initialized distributed Scotch graph')    
+        end if
 
     end function scotch_dgraphinit
 
 
     function scotch_dgraphbuild(dgraph, nVertices, vertloctab, nLocEdgesGraph, edgelocsiz, adjncy) result(ierr)
 
-        use iso_c_binding, only : c_ptr, c_int, c_loc
+        use iso_c_binding, only : c_ptr, c_loc
         use mpas_log, only : mpas_log_write
-        use mpas_c_interfacing, only : mpas_f_to_c_string
-        use iso_c_binding, only : c_char, c_associated
+        use mpas_derived_types, only : MPAS_LOG_CRIT
 
         implicit none
 
-        doubleprecision, target, intent(in) :: dgraph (29)
+        doubleprecision, target, intent(in) :: dgraph (SCOTCH_DGRAPHDIM)
         integer, intent(in) :: nVertices
         integer, intent(in) :: vertloctab(nVertices+1)
         integer, intent(in) :: nLocEdgesGraph
@@ -85,30 +58,32 @@ contains
 
         ! Return value
         integer :: ierr
-        type(c_ptr) :: dgraph_ptr
 
         interface
-            function scotchfdgraphbuild(dgraph_ptr_1, nVertices, vertloctab, &
+            function scotchfdgraphbuild(dgraph_ptr, nVertices, vertloctab, &
                 nLocEdgesGraph, edgelocsiz, adjncy) bind(C, name='scotchm_dgraphbuild') result(err)
                 use iso_c_binding, only : c_ptr, c_int
-                type(c_ptr), value :: dgraph_ptr_1
-                integer, intent(in), value :: nVertices
+                type(c_ptr), value :: dgraph_ptr
+                integer(c_int), value :: nVertices
                 integer(c_int) :: vertloctab(nVertices+1)
-                integer, intent(in), value :: nLocEdgesGraph
-                integer, intent(in), value :: edgelocsiz
+                integer(c_int), value :: nLocEdgesGraph
+                integer(c_int), value :: edgelocsiz
                 integer(c_int) :: adjncy(nLocEdgesGraph)
-                integer(kind=c_int) :: err
+                integer(c_int) :: err
             end function scotchfdgraphbuild
         end interface
 
 
         ierr = 0
-        !dgraph_ptr = c_loc(dgraph(1))
-
-        call mpas_log_write('Building Distributed Scotch Graph')
 
         ierr = scotchfdgraphbuild(c_loc(dgraph), nVertices, vertloctab,  &   
                                   nLocEdgesGraph, edgelocsiz, adjncy)
+
+        if (ierr /= 0) then
+            call mpas_log_write('Error building distributed Scotch graph', MPAS_LOG_CRIT)
+        else 
+            call mpas_log_write('Successfully built distributed Scotch graph')    
+        end if
 
 
     end function scotch_dgraphbuild
@@ -118,8 +93,8 @@ contains
     function scotch_dgraphcheck(dgraph) result(ierr)
 
         use mpas_log, only : mpas_log_write
-        use iso_c_binding, only : c_ptr, c_int, c_loc
-        use iso_c_binding, only : c_char, c_associated
+        use mpas_derived_types, only : MPAS_LOG_CRIT
+        use iso_c_binding, only : c_ptr, c_loc
 
         implicit none
 
@@ -127,102 +102,105 @@ contains
 
         ! Return value
         integer :: ierr
-        type(c_ptr) :: dgraph_ptr
 
         interface
-            function scotchfdgraphcheck(dgraph_ptr_1) bind(C, name='scotchm_dgraphcheck') result(err)
+            function scotchfdgraphcheck(dgraph_ptr) bind(C, name='scotchm_dgraphcheck') result(err)
                 use iso_c_binding, only : c_int, c_ptr
-                type(c_ptr), value :: dgraph_ptr_1
-                integer(kind=c_int) :: err
+                type(c_ptr), value :: dgraph_ptr
+                integer(c_int) :: err
             end function scotchfdgraphcheck
         end interface
 
-
-        ierr = 0
-
-        dgraph_ptr = c_loc(dgraph(1))
-
-        call mpas_log_write('Checking Distributed Scotch Graph')
-
         ierr = scotchfdgraphcheck(c_loc(dgraph))
+
+        if (ierr /= 0) then
+            call mpas_log_write('Error during distributed Scotch graph check', MPAS_LOG_CRIT)
+        else 
+            call mpas_log_write('Successfully checked distributed Scotch graph')    
+        end if
 
 
     end function scotch_dgraphcheck
 
 
-     function scotch_dgraphexit(dgraph) result(ierr)
+     subroutine scotch_dgraphexit(dgraph)
 
         use mpas_log, only : mpas_log_write
-        use iso_c_binding, only : c_ptr, c_int, c_loc
+        use iso_c_binding, only : c_ptr, c_loc
 
         implicit none
 
         doubleprecision, target, intent(in) :: dgraph (SCOTCH_DGRAPHDIM)
 
-        ! Return value
-        integer :: ierr
-        type(c_ptr) :: dgraph_ptr
-
         interface
-            function scotchfdgraphexit(dgraph_ptr_1) bind(C, name='scotchm_dgraphexit') result(err)
+            subroutine scotchfdgraphexit(dgraph_ptr) bind(C, name='scotchm_dgraphexit')
                 use iso_c_binding, only : c_int, c_ptr
-                type(c_ptr) :: dgraph_ptr_1
-                integer(kind=c_int) :: err
-            end function scotchfdgraphexit
+                type(c_ptr), value :: dgraph_ptr
+            end subroutine scotchfdgraphexit
         end interface
 
+        call scotchfdgraphexit(c_loc(dgraph))
 
-        ierr = 0
-
-        dgraph_ptr = c_loc(dgraph(1))
-
-        call mpas_log_write('Checking Distributed Scotch Graph')
-
-        ierr = scotchfdgraphexit(dgraph_ptr)
-
-
-    end function scotch_dgraphexit
+    end subroutine scotch_dgraphexit
 
 
     function scotch_stratinit(stradat) result(ierr)
 
         use mpas_log, only : mpas_log_write
-        use iso_c_binding, only : c_ptr, c_int, c_loc
-        use iso_c_binding, only : c_char, c_associated
+        use mpas_derived_types, only : MPAS_LOG_CRIT
+        use iso_c_binding, only : c_ptr, c_loc
 
         implicit none
 
         doubleprecision, target, intent(in) :: stradat (scotch_stratdim)
         
-
         ! Return value
         integer :: ierr
-        type(c_ptr) :: dgraph_ptr
 
         interface
-            function scotchfstratinit(strat_ptr_1) bind(C, name='scotchm_stratinit') result(err)
+            function scotchfstratinit(strat_ptr) bind(C, name='scotchm_stratinit') result(err)
                 use iso_c_binding, only : c_int, c_ptr
-                type(c_ptr), value :: strat_ptr_1
-                integer(kind=c_int) :: err
+                type(c_ptr), value :: strat_ptr
+                integer(c_int) :: err
             end function scotchfstratinit
         end interface
 
-
-        ierr = 0
-
-        call mpas_log_write('Checking Distributed Scotch Graph')
-
         ierr = scotchfstratinit(c_loc(stradat))
 
+        if (ierr /= 0) then
+            call mpas_log_write('Error during Scotch strategy initialization', MPAS_LOG_CRIT)
+        else 
+            call mpas_log_write('Successfully initialized Scotch strategy')
+        end if
 
     end function scotch_stratinit
 
-    
-        function scotch_dgraphpart(dgraph, num_part, stradat, parttab) result(ierr)
+    subroutine scotch_stratexit(stradat)
 
         use mpas_log, only : mpas_log_write
-        use iso_c_binding, only : c_ptr, c_int, c_loc
-        use iso_c_binding, only : c_char, c_associated
+        use iso_c_binding, only : c_ptr, c_loc
+
+        implicit none
+
+        doubleprecision, target, intent(in) :: stradat (scotch_stratdim)
+        
+        interface
+            subroutine scotchfstratexit(strat_ptr) bind(C, name='scotchm_stratexit')
+                use iso_c_binding, only : c_ptr
+                type(c_ptr), value :: strat_ptr
+            end subroutine scotchfstratexit
+        end interface
+
+        call scotchfstratexit(c_loc(stradat))
+
+    end subroutine scotch_stratexit
+
+    
+    function scotch_dgraphpart(dgraph, num_part, stradat, parttab) result(ierr)
+
+        use mpas_log, only : mpas_log_write
+        use mpas_derived_types, only : MPAS_LOG_CRIT
+        use iso_c_binding, only : c_ptr, c_loc
 
         implicit none
 
@@ -231,32 +209,96 @@ contains
         doubleprecision, target, intent(in) :: stradat (scotch_stratdim)
         integer, intent(out) :: parttab(*)
         
-
         ! Return value
         integer :: ierr
-        type(c_ptr) :: dgraph_ptr
 
         interface
-            function scotchfdgraphpart(dgraph_ptr, num_part, strat_ptr_1, parttab ) bind(C, name='scotchm_dgraphpart') result(err)
+            function scotchfdgraphpart(dgraph_ptr, num_part_loc, strat_ptr, parttab_loc ) bind(C, name='scotchm_dgraphpart') result(err)
                 use iso_c_binding, only : c_int, c_ptr
                 type(c_ptr), value :: dgraph_ptr
-                integer, intent(in), value :: num_part
-                type(c_ptr), value :: strat_ptr_1
-                integer(c_int) :: parttab(*)
-                integer(kind=c_int) :: err
+                integer(c_int), value :: num_part_loc
+                type(c_ptr), value :: strat_ptr
+                integer(c_int) :: parttab_loc(*)
+                integer(c_int) :: err
             end function scotchfdgraphpart
         end interface
 
+        ierr = scotchfdgraphpart(c_loc(dgraph), num_part, c_loc(stradat), parttab)
 
-        ierr = 0
-
-        call mpas_log_write('Checking Distributed Scotch Graph')
-
-        ierr = scotchfdgraphpart(c_loc(my_scotch_dgraph), num_part, c_loc(stradat), parttab)
-
+        if (ierr /= 0) then
+            call mpas_log_write('Error during Scotch graph partition', MPAS_LOG_CRIT)
+        else 
+            call mpas_log_write('Successfully partitioned distributed Scotch graph')
+        end if
 
     end function scotch_dgraphpart
 
+
+    function scotch_dgraphredist(dgraph, parttab, dgraph_out, num_local_vertices) result(ierr)
+
+        use mpas_log, only : mpas_log_write
+        use mpas_derived_types, only : MPAS_LOG_CRIT
+        use iso_c_binding, only : c_ptr, c_loc
+
+        implicit none
+
+        doubleprecision, target, intent(in) :: dgraph (SCOTCH_DGRAPHDIM)
+        integer, intent(in) :: parttab(*)
+        doubleprecision, target, intent(inout) :: dgraph_out (SCOTCH_DGRAPHDIM)
+        integer :: num_local_vertices
+           
+        ! Return value
+        integer :: ierr
+
+        interface
+            function scotchfdgraphredist(dgraph_ptr, parttab_loc, dgraph_out_ptr, vertlocnbr ) bind(C, name='scotchm_dgraphredist') result(err)
+                use iso_c_binding, only : c_int, c_ptr
+                type(c_ptr), value :: dgraph_ptr
+                integer(c_int) :: parttab_loc(*)
+                type(c_ptr), value :: dgraph_out_ptr
+                integer(c_int) :: vertlocnbr
+                integer(c_int) :: err
+            end function scotchfdgraphredist
+        end interface
+
+        ierr = scotchfdgraphredist(c_loc(dgraph), parttab, c_loc(dgraph_out), num_local_vertices)
+
+        if (ierr /= 0) then
+            call mpas_log_write('Error during Scotch graph redistribution', MPAS_LOG_CRIT)
+        else 
+            call mpas_log_write('Successfully redistributed Scotch graph')
+        end if
+
+
+    end function scotch_dgraphredist
+
+
+    function scotch_dgraphout(dgraph, local_cell_list) result(ierr)
+
+        use mpas_log, only : mpas_log_write
+        use iso_c_binding, only : c_ptr, c_loc
+
+        implicit none
+
+        doubleprecision, target, intent(in) :: dgraph (SCOTCH_DGRAPHDIM)
+        integer, intent(out) :: local_cell_list(*)
+
+        ! Return value
+        integer :: ierr
+
+        interface
+            function scotchfdgraphout(dgraph_ptr, cell_list) bind(C, name='scotchm_dgraphout') result(err)
+                use iso_c_binding, only : c_int, c_ptr
+                type(c_ptr), value :: dgraph_ptr
+                integer(c_int) :: cell_list(*)
+                integer(c_int) :: err
+            end function scotchfdgraphout
+        end interface
+
+        ierr = scotchfdgraphout(c_loc(dgraph), local_cell_list)
+
+
+    end function scotch_dgraphout
 
 
 end module mpas_ptscotch_interface

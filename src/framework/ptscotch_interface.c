@@ -16,14 +16,6 @@
 #include "ptscotch.h"
 
 
-///#ifdef _MPI
-
-///#endif
-
-#define MSGSIZE 256
-
-SCOTCH_Dgraph       dgrfdat;
-
 
 typedef struct Dgraph_ {
   unsigned int                flagval;              /*+ Graph properties                                          +*/
@@ -65,7 +57,7 @@ typedef struct Dgraph_ {
   int *                     procsndtab;           /*+ Number of vertices to send in ghost vertex sub-arrays     +*/
   int *                     procsidtab;           /*+ Array of indices to build communication vectors (send)    +*/
   int                       procsidnbr;           /*+ Size of the send index array                              +*/
-} Dgraph;
+} Dgraph2;
 
 
 /*
@@ -73,7 +65,6 @@ typedef struct Dgraph_ {
  *  messageType_c may be any of "MPAS_LOG_OUT", "MPAS_LOG_WARN", "MPAS_LOG_ERR", or "MPAS_LOG_CRIT"
  */
 int scotchm_dgraphinit(void * ptr, int localcomm)
-//int scotchm_dgraphinit(int localcomm)
 {
 	MPI_Comm comm;
 	MPI_Comm comm2;
@@ -85,20 +76,6 @@ int scotchm_dgraphinit(void * ptr, int localcomm)
 	SCOTCH_Dgraph *dgraph = (SCOTCH_Dgraph *) ptr;
    
    err = SCOTCH_dgraphInit(dgraph, comm);
-
-
-   Dgraph * my_dgraph = (Dgraph *) dgraph;
-
-	printf("In scotchm_dgraphinit: After SCOTCH_dgraphInit: = %d \n",my_dgraph->procglbnbr);
-	printf("In scotchm_dgraphinit: After SCOTCH_dgraphInit: = %d \n",my_dgraph->proclocnum);
-
-	comm2 = my_dgraph->proccomm;
-
-	MPI_Comm_size (comm2, &size); /* Get communicator data */
-  	MPI_Comm_rank (comm2, &rank);
-
-	printf("In scotchm_dgraphinit: MPI_Comm size = %d, rank = %d\n",size, rank);
-
 
 	return err;
 
@@ -128,14 +105,14 @@ int scotchm_dgraphbuild(void * ptr,
 
 	SCOTCH_Dgraph *dgraph = (SCOTCH_Dgraph *) ptr;	
 
-	Dgraph * my_dgraph = (Dgraph *) dgraph;
+	// Dgraph2 * my_dgraph = (Dgraph2 *) dgraph;
 
-	for (int i=0; i < nVertices+1; i++) {
-		printf("before scotchm_dgraphbuild: rank: %d vertloctab(%d) = %d \n",my_dgraph->proclocnum, i, vertloctab[i]);
-	}
-	for (int i=0; i < nLocEdgesGraph; i++) {
-		printf("before scotchm_dgraphbuild: rank: %d edgeloctab(%d) = %d \n",my_dgraph->proclocnum, i, edgeloctab[i]);
-	}
+	// for (int i=0; i < nVertices+1; i++) {
+	// 	printf("before scotchm_dgraphbuild: rank: %d vertloctab(%d) = %d \n",my_dgraph->proclocnum, i, vertloctab[i]);
+	// }
+	// for (int i=0; i < nLocEdgesGraph; i++) {
+	// 	printf("before scotchm_dgraphbuild: rank: %d edgeloctab(%d) = %d \n",my_dgraph->proclocnum, i, edgeloctab[i]);
+	// }
 
 	err = SCOTCH_dgraphBuild (dgraph,
 							  baseval,
@@ -153,15 +130,15 @@ int scotchm_dgraphbuild(void * ptr,
 
 	
 
-	printf("In scotchm_dgraphbuild: rank: %d vertglbnbr = %d \n",my_dgraph->proclocnum, my_dgraph->vertglbnbr);
-	printf("In scotchm_dgraphbuild: rank: %d vertlocnbr = %d \n",my_dgraph->proclocnum, my_dgraph->vertlocnbr);
+	// printf("In scotchm_dgraphbuild: rank: %d vertglbnbr = %d \n",my_dgraph->proclocnum, my_dgraph->vertglbnbr);
+	// printf("In scotchm_dgraphbuild: rank: %d vertlocnbr = %d \n",my_dgraph->proclocnum, my_dgraph->vertlocnbr);
 
-	for (int i=0; i < nVertices+1; i++) {
-		printf("In scotchm_dgraphbuild: rank: %d vertloctab(%d) = %d \n",my_dgraph->proclocnum, i, my_dgraph->vertloctax[i]);
-	}
-	for (int i=0; i < nLocEdgesGraph; i++) {
-		printf("In scotchm_dgraphbuild: rank: %d edgeloctab(%d) = %d \n",my_dgraph->proclocnum, i, my_dgraph->edgeloctax[i]);
-	}
+	// for (int i=0; i < nVertices+1; i++) {
+	// 	printf("In scotchm_dgraphbuild: rank: %d vertloctab(%d) = %d \n",my_dgraph->proclocnum, i, my_dgraph->vertloctax[i]);
+	// }
+	// for (int i=0; i < nLocEdgesGraph; i++) {
+	// 	printf("In scotchm_dgraphbuild: rank: %d edgeloctab(%d) = %d \n",my_dgraph->proclocnum, i, my_dgraph->edgeloctax[i]);
+	// }
 
 	return err;
 
@@ -185,7 +162,7 @@ int scotchm_dgraphpart(void * ptr, int num_part, void * ptr_strat, int * parttab
 	return SCOTCH_dgraphPart(dgraph, num_part, strat, parttab);
 }
 
-int scotch_dgraphredist(void * ptr, int *partloctab, void * ptr_out){
+int scotchm_dgraphredist(void * ptr, int *partloctab, void * ptr_out, int *vertlocnbr){
 
 
 	SCOTCH_Dgraph *dgraph_in = (SCOTCH_Dgraph *) ptr;
@@ -193,19 +170,53 @@ int scotch_dgraphredist(void * ptr, int *partloctab, void * ptr_out){
 	int * permgsttab = NULL; // Redistribution permutation array
 	int vertlocdlt = 0; // Extra size of local vertex array 
 	int edgelocdlt = 0; // Extra size of local edge array
+	int err;
 
-	return SCOTCH_dgraphRedist (dgraph_in, partloctab, permgsttab, vertlocdlt, edgelocdlt, dgraph_out);
+	err = SCOTCH_dgraphRedist (dgraph_in, partloctab, permgsttab, vertlocdlt, edgelocdlt, dgraph_out);
+
+
+	Dgraph2 *dgraph_mine = (Dgraph2 *) dgraph_out;
+
+	*vertlocnbr = dgraph_mine->vertlocnbr;
+
+	// printf("redist: vlllb pointer = %p, +1 %p \n",dgraph_mine->vlblloctax, dgraph_mine->vlblloctax+1);
+
+
+	// for (int i=1; i < dgraph_mine->vertlocnbr + 1; i++) {
+	// 	printf("redist bypass: vlllb(%d) = %d \n",i,dgraph_mine->vlblloctax[i] );
+	// }
+	return err;
 }
 
-// int scotchfdgraphdata()
-// {
-// 	void                        SCOTCH_dgraphData   (const SCOTCH_Dgraph * const, SCOTCH_Num * const, SCOTCH_Num * const, SCOTCH_Num * const, SCOTCH_Num * const, SCOTCH_Num * const, SCOTCH_Num ** const, SCOTCH_Num ** const, SCOTCH_Num ** const, SCOTCH_Num ** const, SCOTCH_Num * const, SCOTCH_Num * const, SCOTCH_Num * const, SCOTCH_Num ** const, SCOTCH_Num ** const, SCOTCH_Num ** const, MPI_Comm * const);
-// }
 
-void scotchm_dgraphexit(SCOTCH_Dgraph *dgraph)
+int scotchm_dgraphout(void * ptr, int * cell_list){
+
+
+	//SCOTCH_Dgraph *dgraph_in = (SCOTCH_Dgraph *) ptr;
+	
+	int * permgsttab = NULL; // Redistribution permutation array
+	int vertlocdlt = 0; // Extra size of local vertex array 
+	int edgelocdlt = 0; // Extra size of local edge array
+	int err;
+
+	
+	Dgraph2 *dgraph_mine = (Dgraph2 *) ptr;
+
+	//printf("In graphout:  vertlocnbr=%d  vertglbnbr=%d \n",dgraph_mine->vertlocnbr,  dgraph_mine->vertglbnbr);
+
+	//printf("graphout: vlllb pointer = %p, +1 %p \n",dgraph_mine->vlblloctax, dgraph_mine->vlblloctax+1);
+
+	for (int i=0; i < dgraph_mine->vertlocnbr; i++) {
+		cell_list[i] = *(dgraph_mine->vlblloctax + dgraph_mine->baseval + i);
+	}
+	return err;
+}
+
+
+void scotchm_dgraphexit(void *ptr)
 {
 
-	return SCOTCH_dgraphExit(dgraph);
+	return SCOTCH_dgraphExit((SCOTCH_Dgraph *) ptr);
 }
 
 int scotchm_stratinit(void * strat_ptr)
@@ -215,7 +226,7 @@ int scotchm_stratinit(void * strat_ptr)
 		return  SCOTCH_stratInit(strat);
 }
 
-// int scotchfstratexit()
-// {
-// 	void                        SCOTCH_stratExit    (SCOTCH_Strat * const);
-// }
+void scotchm_stratexit(void * strat_ptr)
+{
+	return SCOTCH_stratExit((SCOTCH_Strat *) strat_ptr);
+}
