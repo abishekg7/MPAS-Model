@@ -60,10 +60,7 @@ typedef struct Dgraph_ {
 } Dgraph2;
 
 
-/*
- *  Interface routines for writing log messages; defined in mpas_log.F
- *  messageType_c may be any of "MPAS_LOG_OUT", "MPAS_LOG_WARN", "MPAS_LOG_ERR", or "MPAS_LOG_CRIT"
- */
+
 int scotchm_dgraphinit(void * ptr, int localcomm)
 {
 	MPI_Comm comm;
@@ -101,18 +98,8 @@ int scotchm_dgraphbuild(void * ptr,
 	int * edloloctab = NULL; // Optional array of integer loads for each local edge
 	int i,err;
 
-	
 
 	SCOTCH_Dgraph *dgraph = (SCOTCH_Dgraph *) ptr;	
-
-	// Dgraph2 * my_dgraph = (Dgraph2 *) dgraph;
-
-	// for (int i=0; i < nVertices+1; i++) {
-	// 	printf("before scotchm_dgraphbuild: rank: %d vertloctab(%d) = %d \n",my_dgraph->proclocnum, i, vertloctab[i]);
-	// }
-	// for (int i=0; i < nLocEdgesGraph; i++) {
-	// 	printf("before scotchm_dgraphbuild: rank: %d edgeloctab(%d) = %d \n",my_dgraph->proclocnum, i, edgeloctab[i]);
-	// }
 
 	err = SCOTCH_dgraphBuild (dgraph,
 							  baseval,
@@ -128,31 +115,14 @@ int scotchm_dgraphbuild(void * ptr,
 							  edgegsttab,
 							  edloloctab);
 
-	
-
-	// printf("In scotchm_dgraphbuild: rank: %d vertglbnbr = %d \n",my_dgraph->proclocnum, my_dgraph->vertglbnbr);
-	// printf("In scotchm_dgraphbuild: rank: %d vertlocnbr = %d \n",my_dgraph->proclocnum, my_dgraph->vertlocnbr);
-
-	// for (int i=0; i < nVertices+1; i++) {
-	// 	printf("In scotchm_dgraphbuild: rank: %d vertloctab(%d) = %d \n",my_dgraph->proclocnum, i, my_dgraph->vertloctax[i]);
-	// }
-	// for (int i=0; i < nLocEdgesGraph; i++) {
-	// 	printf("In scotchm_dgraphbuild: rank: %d edgeloctab(%d) = %d \n",my_dgraph->proclocnum, i, my_dgraph->edgeloctax[i]);
-	// }
-
 	return err;
 
 }
 
 int scotchm_dgraphcheck(void * ptr)
 {
-
-	SCOTCH_Dgraph *dgraph = (SCOTCH_Dgraph *) ptr;
-
-	return SCOTCH_dgraphCheck(dgraph);
+	return SCOTCH_dgraphCheck((SCOTCH_Dgraph *) ptr);
 }
-
-
 
 int scotchm_dgraphpart(void * ptr, int num_part, void * ptr_strat, int * parttab){
 
@@ -164,7 +134,6 @@ int scotchm_dgraphpart(void * ptr, int num_part, void * ptr_strat, int * parttab
 
 int scotchm_dgraphredist(void * ptr, int *partloctab, void * ptr_out, int *vertlocnbr){
 
-
 	SCOTCH_Dgraph *dgraph_in = (SCOTCH_Dgraph *) ptr;
 	SCOTCH_Dgraph *dgraph_out = (SCOTCH_Dgraph *) ptr_out;
 	int * permgsttab = NULL; // Redistribution permutation array
@@ -174,56 +143,37 @@ int scotchm_dgraphredist(void * ptr, int *partloctab, void * ptr_out, int *vertl
 
 	err = SCOTCH_dgraphRedist (dgraph_in, partloctab, permgsttab, vertlocdlt, edgelocdlt, dgraph_out);
 
+	Dgraph2 *dgraph = (Dgraph2 *) dgraph_out;
 
-	Dgraph2 *dgraph_mine = (Dgraph2 *) dgraph_out;
+	*vertlocnbr = dgraph->vertlocnbr;
 
-	*vertlocnbr = dgraph_mine->vertlocnbr;
-
-	// printf("redist: vlllb pointer = %p, +1 %p \n",dgraph_mine->vlblloctax, dgraph_mine->vlblloctax+1);
-
-
-	// for (int i=1; i < dgraph_mine->vertlocnbr + 1; i++) {
-	// 	printf("redist bypass: vlllb(%d) = %d \n",i,dgraph_mine->vlblloctax[i] );
-	// }
 	return err;
 }
 
 
 int scotchm_dgraphout(void * ptr, int * cell_list){
 
-
-	//SCOTCH_Dgraph *dgraph_in = (SCOTCH_Dgraph *) ptr;
-	
 	int * permgsttab = NULL; // Redistribution permutation array
 	int vertlocdlt = 0; // Extra size of local vertex array 
 	int edgelocdlt = 0; // Extra size of local edge array
 	int err;
 
-	
-	Dgraph2 *dgraph_mine = (Dgraph2 *) ptr;
+	Dgraph2 *dgraph = (Dgraph2 *) ptr;
 
-	//printf("In graphout:  vertlocnbr=%d  vertglbnbr=%d \n",dgraph_mine->vertlocnbr,  dgraph_mine->vertglbnbr);
-
-	//printf("graphout: vlllb pointer = %p, +1 %p \n",dgraph_mine->vlblloctax, dgraph_mine->vlblloctax+1);
-
-	for (int i=0; i < dgraph_mine->vertlocnbr; i++) {
-		cell_list[i] = *(dgraph_mine->vlblloctax + dgraph_mine->baseval + i);
+	for (int i=0; i < dgraph->vertlocnbr; i++) {
+		cell_list[i] = *(dgraph->vlblloctax + dgraph->baseval + i);
 	}
 	return err;
 }
 
-
 void scotchm_dgraphexit(void *ptr)
 {
-
 	return SCOTCH_dgraphExit((SCOTCH_Dgraph *) ptr);
 }
 
 int scotchm_stratinit(void * strat_ptr)
 {
-		SCOTCH_Strat *strat = (SCOTCH_Strat *) strat_ptr;
-
-		return  SCOTCH_stratInit(strat);
+	return SCOTCH_stratInit((SCOTCH_Strat *) strat_ptr);
 }
 
 void scotchm_stratexit(void * strat_ptr)
