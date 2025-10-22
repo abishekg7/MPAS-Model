@@ -182,7 +182,7 @@ int scotchm_stratinit(void * strat_ptr)
 {
 	SCOTCH_stratInit((SCOTCH_Strat *) strat_ptr);
 	//SCOTCH_stratDgraphMapBuild ((SCOTCH_Strat *) strat_ptr, SCOTCH_STRATDEFAULT, 16, 16, 0.03);
-	//SCOTCH_stratDgraphMapBuild ((SCOTCH_Strat *) strat_ptr, SCOTCH_STRATSCALABILITY, 1, 0, 0.05);
+	SCOTCH_stratDgraphMapBuild ((SCOTCH_Strat *) strat_ptr, SCOTCH_STRATSCALABILITY, 1, 0, 0.05);
 	
 
 	return 0;
