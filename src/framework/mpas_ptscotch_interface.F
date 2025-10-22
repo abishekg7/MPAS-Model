@@ -5,6 +5,7 @@ module mpas_ptscotch_interface
     public :: scotch_dgraphinit, scotch_dgraphbuild
 
     
+
 contains
 
     function scotch_dgraphinit(dgraph, comm) result(ierr)
@@ -49,11 +50,12 @@ contains
         implicit none
 
         doubleprecision, target, intent(in) :: dgraph (SCOTCH_DGRAPHDIM)
-        integer, intent(in) :: nVertices
-        integer, intent(in) :: vertloctab(nVertices+1)
-        integer, intent(in) :: nLocEdgesGraph
-        integer, intent(in) :: edgelocsiz
-        integer, intent(in) :: adjncy(nLocEdgesGraph)
+        integer(SCOTCH_NUMSIZE), intent(in) :: nVertices
+        integer(SCOTCH_NUMSIZE), intent(in) :: vertloctab(nVertices+1)
+        integer(SCOTCH_NUMSIZE), intent(in) :: nLocEdgesGraph
+        integer(SCOTCH_NUMSIZE), intent(in) :: edgelocsiz
+        integer(SCOTCH_NUMSIZE), intent(in) :: adjncy(nLocEdgesGraph)
+
 
 
         ! Return value
@@ -87,8 +89,6 @@ contains
 
 
     end function scotch_dgraphbuild
-
-
 
     function scotch_dgraphcheck(dgraph) result(ierr)
 
@@ -205,9 +205,9 @@ contains
         implicit none
 
         doubleprecision, target, intent(in) :: dgraph (SCOTCH_DGRAPHDIM)
-        integer, intent(in) :: num_part
+        integer(SCOTCH_NUMSIZE), intent(in) :: num_part
         doubleprecision, target, intent(in) :: stradat (scotch_stratdim)
-        integer, intent(out) :: parttab(*)
+        integer(SCOTCH_NUMSIZE), intent(out) :: parttab(*)
         
         ! Return value
         integer :: ierr
@@ -243,9 +243,9 @@ contains
         implicit none
 
         doubleprecision, target, intent(in) :: dgraph (SCOTCH_DGRAPHDIM)
-        integer, intent(in) :: parttab(*)
+        integer(SCOTCH_NUMSIZE), intent(in) :: parttab(*)
         doubleprecision, target, intent(inout) :: dgraph_out (SCOTCH_DGRAPHDIM)
-        integer :: num_local_vertices
+        integer(SCOTCH_NUMSIZE) :: num_local_vertices
            
         ! Return value
         integer :: ierr
@@ -281,7 +281,7 @@ contains
         implicit none
 
         doubleprecision, target, intent(in) :: dgraph (SCOTCH_DGRAPHDIM)
-        integer, intent(out) :: local_cell_list(*)
+        integer(SCOTCH_NUMSIZE), intent(out) :: local_cell_list(*)
 
         ! Return value
         integer :: ierr
