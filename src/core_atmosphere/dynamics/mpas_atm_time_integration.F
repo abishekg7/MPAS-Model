@@ -853,6 +853,8 @@ module atm_time_integration
       type (mpas_pool_type), pointer :: tend_physics
       type (mpas_pool_type), pointer :: lbc
 
+      logical, pointer :: config_apply_lbcs_ptr
+      logical :: config_apply_lbcs
 
       real (kind=RKIND), dimension(:,:), pointer :: ru, ru_p
       real (kind=RKIND), dimension(:,:), pointer :: ru_save
@@ -909,6 +911,9 @@ module atm_time_integration
       call mpas_pool_get_subpool(domain % blocklist % structs, 'tend', tend)
       call mpas_pool_get_subpool(domain % blocklist % structs, 'tend_physics', tend_physics)
       call mpas_pool_get_subpool(domain % blocklist % structs, 'lbc', lbc)
+
+      call mpas_pool_get_config(domain % blocklist % configs, 'config_apply_lbcs', config_apply_lbcs_ptr)
+      config_apply_lbcs = config_apply_lbcs_ptr
 
       MPAS_ACC_TIMER_START('atm_srk3 [ACC_data_xfer]')
       call mpas_pool_get_array(diag, 'ru', ru)
@@ -1072,44 +1077,46 @@ module atm_time_integration
       !$acc enter data copyin(scalar_tend_save)
 
 
-      call mpas_pool_get_array(lbc, 'lbc_u', lbc_u, 2)
-      !$acc enter data copyin(lbc_u)
-      call mpas_pool_get_array(lbc, 'lbc_w', lbc_w, 2)
-      !$acc enter data copyin(lbc_w)
-      call mpas_pool_get_array(lbc, 'lbc_ru', lbc_ru, 2)
-      !$acc enter data copyin(lbc_ru)
-      call mpas_pool_get_array(lbc, 'lbc_rho_edge', lbc_rho_edge, 2)
-      !$acc enter data copyin(lbc_rho_edge)
-      call mpas_pool_get_array(lbc, 'lbc_theta', lbc_theta, 2)
-      !$acc enter data copyin(lbc_theta)
-      call mpas_pool_get_array(lbc, 'lbc_rtheta_m', lbc_rtheta_m, 2)
-      !$acc enter data copyin(lbc_rtheta_m)
-      call mpas_pool_get_array(lbc, 'lbc_rho_zz', lbc_rho_zz, 2)
-      !$acc enter data copyin(lbc_rho_zz)
-      call mpas_pool_get_array(lbc, 'lbc_rho', lbc_rho, 2)
-      !$acc enter data copyin(lbc_rho)
-      call mpas_pool_get_array(lbc, 'lbc_scalars', lbc_scalars, 2)
-      !$acc enter data copyin(lbc_scalars)
+      if(config_apply_lbcs) then
+         call mpas_pool_get_array(lbc, 'lbc_u', lbc_u, 2)
+         !$acc enter data copyin(lbc_u)
+         call mpas_pool_get_array(lbc, 'lbc_w', lbc_w, 2)
+         !$acc enter data copyin(lbc_w)
+         call mpas_pool_get_array(lbc, 'lbc_ru', lbc_ru, 2)
+         !$acc enter data copyin(lbc_ru)
+         call mpas_pool_get_array(lbc, 'lbc_rho_edge', lbc_rho_edge, 2)
+         !$acc enter data copyin(lbc_rho_edge)
+         call mpas_pool_get_array(lbc, 'lbc_theta', lbc_theta, 2)
+         !$acc enter data copyin(lbc_theta)
+         call mpas_pool_get_array(lbc, 'lbc_rtheta_m', lbc_rtheta_m, 2)
+         !$acc enter data copyin(lbc_rtheta_m)
+         call mpas_pool_get_array(lbc, 'lbc_rho_zz', lbc_rho_zz, 2)
+         !$acc enter data copyin(lbc_rho_zz)
+         call mpas_pool_get_array(lbc, 'lbc_rho', lbc_rho, 2)
+         !$acc enter data copyin(lbc_rho)
+         call mpas_pool_get_array(lbc, 'lbc_scalars', lbc_scalars, 2)
+         !$acc enter data copyin(lbc_scalars)
 
-      
-      call mpas_pool_get_array(lbc, 'lbc_u', lbc_tend_u, 1)
-      !$acc enter data copyin(lbc_tend_u)
-      call mpas_pool_get_array(lbc, 'lbc_ru', lbc_tend_ru, 1)
-      !$acc enter data copyin(lbc_tend_ru)
-      call mpas_pool_get_array(lbc, 'lbc_rho_edge', lbc_tend_rho_edge, 1)
-      !$acc enter data copyin(lbc_tend_rho_edge)
-      call mpas_pool_get_array(lbc, 'lbc_w', lbc_tend_w, 1)
-      !$acc enter data copyin(lbc_tend_w)
-      call mpas_pool_get_array(lbc, 'lbc_theta', lbc_tend_theta, 1)
-      !$acc enter data copyin(lbc_tend_theta)
-      call mpas_pool_get_array(lbc, 'lbc_rtheta_m', lbc_tend_rtheta_m, 1)
-      !$acc enter data copyin(lbc_tend_rtheta_m)
-      call mpas_pool_get_array(lbc, 'lbc_rho_zz', lbc_tend_rho_zz, 1)
-      !$acc enter data copyin(lbc_tend_rho_zz)
-      call mpas_pool_get_array(lbc, 'lbc_rho', lbc_tend_rho, 1)
-      !$acc enter data copyin(lbc_tend_rho)
-      call mpas_pool_get_array(lbc, 'lbc_scalars', lbc_tend_scalars, 1)
-      !$acc enter data copyin(lbc_tend_scalars)
+         
+         call mpas_pool_get_array(lbc, 'lbc_u', lbc_tend_u, 1)
+         !$acc enter data copyin(lbc_tend_u)
+         call mpas_pool_get_array(lbc, 'lbc_ru', lbc_tend_ru, 1)
+         !$acc enter data copyin(lbc_tend_ru)
+         call mpas_pool_get_array(lbc, 'lbc_rho_edge', lbc_tend_rho_edge, 1)
+         !$acc enter data copyin(lbc_tend_rho_edge)
+         call mpas_pool_get_array(lbc, 'lbc_w', lbc_tend_w, 1)
+         !$acc enter data copyin(lbc_tend_w)
+         call mpas_pool_get_array(lbc, 'lbc_theta', lbc_tend_theta, 1)
+         !$acc enter data copyin(lbc_tend_theta)
+         call mpas_pool_get_array(lbc, 'lbc_rtheta_m', lbc_tend_rtheta_m, 1)
+         !$acc enter data copyin(lbc_tend_rtheta_m)
+         call mpas_pool_get_array(lbc, 'lbc_rho_zz', lbc_tend_rho_zz, 1)
+         !$acc enter data copyin(lbc_tend_rho_zz)
+         call mpas_pool_get_array(lbc, 'lbc_rho', lbc_tend_rho, 1)
+         !$acc enter data copyin(lbc_tend_rho)
+         call mpas_pool_get_array(lbc, 'lbc_scalars', lbc_tend_scalars, 1)
+         !$acc enter data copyin(lbc_tend_scalars)
+      end if
 
       call mpas_pool_get_array(tend_physics, 'rthdynten', rthdynten)
       !$acc enter data copyin(rthdynten)
@@ -1135,6 +1142,8 @@ module atm_time_integration
       type (mpas_pool_type), pointer :: tend_physics
       type (mpas_pool_type), pointer :: lbc
 
+      logical, pointer :: config_apply_lbcs_ptr
+      logical :: config_apply_lbcs
 
       real (kind=RKIND), dimension(:,:), pointer :: ru, ru_p
       real (kind=RKIND), dimension(:,:), pointer :: ru_save
@@ -1191,6 +1200,9 @@ module atm_time_integration
       call mpas_pool_get_subpool(domain % blocklist % structs, 'tend', tend)
       call mpas_pool_get_subpool(domain % blocklist % structs, 'tend_physics', tend_physics)
       call mpas_pool_get_subpool(domain % blocklist % structs, 'lbc', lbc)
+
+      call mpas_pool_get_config(domain % blocklist % configs, 'config_apply_lbcs', config_apply_lbcs_ptr)
+      config_apply_lbcs = config_apply_lbcs_ptr
 
       MPAS_ACC_TIMER_START('atm_srk3 [ACC_data_xfer]')
       call mpas_pool_get_array(diag, 'ru', ru)
@@ -1353,45 +1365,45 @@ module atm_time_integration
       call mpas_pool_get_array(tend, 'scalars_tend', scalar_tend_save)
       !$acc exit data copyout(scalar_tend_save)
 
-
-      call mpas_pool_get_array(lbc, 'lbc_u', lbc_u, 2)
-      !$acc exit data delete(lbc_u)
-      call mpas_pool_get_array(lbc, 'lbc_w', lbc_w, 2)
-      !$acc exit data delete(lbc_w)
-      call mpas_pool_get_array(lbc, 'lbc_ru', lbc_ru, 2)
-      !$acc exit data delete(lbc_ru)
-      call mpas_pool_get_array(lbc, 'lbc_rho_edge', lbc_rho_edge, 2)
-      !$acc exit data delete(lbc_rho_edge)
-      call mpas_pool_get_array(lbc, 'lbc_theta', lbc_theta, 2)
-      !$acc exit data delete(lbc_theta)
-      call mpas_pool_get_array(lbc, 'lbc_rtheta_m', lbc_rtheta_m, 2)
-      !$acc exit data delete(lbc_rtheta_m)
-      call mpas_pool_get_array(lbc, 'lbc_rho_zz', lbc_rho_zz, 2)
-      !$acc exit data delete(lbc_rho_zz)
-      call mpas_pool_get_array(lbc, 'lbc_rho', lbc_rho, 2)
-      !$acc exit data delete(lbc_rho)
-      call mpas_pool_get_array(lbc, 'lbc_scalars', lbc_scalars, 2)
-      !$acc exit data delete(lbc_scalars)
-
+      if(config_apply_lbcs) then
+         call mpas_pool_get_array(lbc, 'lbc_u', lbc_u, 2)
+         !$acc exit data delete(lbc_u)
+         call mpas_pool_get_array(lbc, 'lbc_w', lbc_w, 2)
+         !$acc exit data delete(lbc_w)
+         call mpas_pool_get_array(lbc, 'lbc_ru', lbc_ru, 2)
+         !$acc exit data delete(lbc_ru)
+         call mpas_pool_get_array(lbc, 'lbc_rho_edge', lbc_rho_edge, 2)
+         !$acc exit data delete(lbc_rho_edge)
+         call mpas_pool_get_array(lbc, 'lbc_theta', lbc_theta, 2)
+         !$acc exit data delete(lbc_theta)
+         call mpas_pool_get_array(lbc, 'lbc_rtheta_m', lbc_rtheta_m, 2)
+         !$acc exit data delete(lbc_rtheta_m)
+         call mpas_pool_get_array(lbc, 'lbc_rho_zz', lbc_rho_zz, 2)
+         !$acc exit data delete(lbc_rho_zz)
+         call mpas_pool_get_array(lbc, 'lbc_rho', lbc_rho, 2)
+         !$acc exit data delete(lbc_rho)
+         call mpas_pool_get_array(lbc, 'lbc_scalars', lbc_scalars, 2)
+         !$acc exit data delete(lbc_scalars)
       
-      call mpas_pool_get_array(lbc, 'lbc_u', lbc_tend_u, 1)
-      !$acc exit data delete(lbc_tend_u)
-      call mpas_pool_get_array(lbc, 'lbc_ru', lbc_tend_ru, 1)
-      !$acc exit data delete(lbc_tend_ru)
-      call mpas_pool_get_array(lbc, 'lbc_rho_edge', lbc_tend_rho_edge, 1)
-      !$acc exit data delete(lbc_tend_rho_edge)
-      call mpas_pool_get_array(lbc, 'lbc_w', lbc_tend_w, 1)
-      !$acc exit data delete(lbc_tend_w)
-      call mpas_pool_get_array(lbc, 'lbc_theta', lbc_tend_theta, 1)
-      !$acc exit data delete(lbc_tend_theta)
-      call mpas_pool_get_array(lbc, 'lbc_rtheta_m', lbc_tend_rtheta_m, 1)
-      !$acc exit data delete(lbc_tend_rtheta_m)
-      call mpas_pool_get_array(lbc, 'lbc_rho_zz', lbc_tend_rho_zz, 1)
-      !$acc exit data delete(lbc_tend_rho_zz)
-      call mpas_pool_get_array(lbc, 'lbc_rho', lbc_tend_rho, 1)
-      !$acc exit data delete(lbc_tend_rho)
-      call mpas_pool_get_array(lbc, 'lbc_scalars', lbc_tend_scalars, 1)
-      !$acc exit data delete(lbc_tend_scalars)
+         call mpas_pool_get_array(lbc, 'lbc_u', lbc_tend_u, 1)
+         !$acc exit data delete(lbc_tend_u)
+         call mpas_pool_get_array(lbc, 'lbc_ru', lbc_tend_ru, 1)
+         !$acc exit data delete(lbc_tend_ru)
+         call mpas_pool_get_array(lbc, 'lbc_rho_edge', lbc_tend_rho_edge, 1)
+         !$acc exit data delete(lbc_tend_rho_edge)
+         call mpas_pool_get_array(lbc, 'lbc_w', lbc_tend_w, 1)
+         !$acc exit data delete(lbc_tend_w)
+         call mpas_pool_get_array(lbc, 'lbc_theta', lbc_tend_theta, 1)
+         !$acc exit data delete(lbc_tend_theta)
+         call mpas_pool_get_array(lbc, 'lbc_rtheta_m', lbc_tend_rtheta_m, 1)
+         !$acc exit data delete(lbc_tend_rtheta_m)
+         call mpas_pool_get_array(lbc, 'lbc_rho_zz', lbc_tend_rho_zz, 1)
+         !$acc exit data delete(lbc_tend_rho_zz)
+         call mpas_pool_get_array(lbc, 'lbc_rho', lbc_tend_rho, 1)
+         !$acc exit data delete(lbc_tend_rho)
+         call mpas_pool_get_array(lbc, 'lbc_scalars', lbc_tend_scalars, 1)
+         !$acc exit data delete(lbc_tend_scalars)
+      end if
 
       call mpas_pool_get_array(tend_physics, 'rthdynten', rthdynten)
       !$acc exit data copyout(rthdynten)
