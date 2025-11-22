@@ -10176,20 +10176,32 @@ CONTAINS
 
 !--- additional local variables and arrays needed to include additional layers between the model top
 !    and the top of the atmosphere:
- real, allocatable,dimension(its:ite,kts:kte+1):: play,hlay,tlay,h2ovmr,o3vmr,co2vmr,o2vmr,ch4vmr,n2ovmr
- real, allocatable,dimension(its:ite,kts:kte+1):: clwpth,ciwpth,cswpth,rel,rei,res,cldfrac,relqmcl,reicmcl,resnmcl
- real, allocatable,dimension(its:ite,kts:kte+1):: swhr,swhrc
+!  real, allocatable,dimension(its:ite,kts:kte+1):: play,hlay,tlay,h2ovmr,o3vmr,co2vmr,o2vmr,ch4vmr,n2ovmr
+!  real, allocatable,dimension(its:ite,kts:kte+1):: clwpth,ciwpth,cswpth,rel,rei,res,cldfrac,relqmcl,reicmcl,resnmcl
+!  real, allocatable,dimension(its:ite,kts:kte+1):: swhr,swhrc
 
- real, allocatable,dimension(its:ite,kts:kte+2):: plev,tlev
- real, allocatable,dimension(its:ite,kts:kte+2):: swuflx,swdflx,swuflxc,swdflxc
- real, allocatable,dimension(its:ite,kts:kte+2):: swuflxcln,swdflxcln
- real, allocatable,dimension(its:ite,kts:kte+2):: sibvisdir,sibvisdif,sibnirdir,sibnirdif
- real, allocatable,dimension(its:ite,kts:kte+2):: swdkdir,swdkdif,swdkdirc
+!  real, allocatable,dimension(its:ite,kts:kte+2):: plev,tlev
+!  real, allocatable,dimension(its:ite,kts:kte+2):: swuflx,swdflx,swuflxc,swdflxc
+!  real, allocatable,dimension(its:ite,kts:kte+2):: swuflxcln,swdflxcln
+!  real, allocatable,dimension(its:ite,kts:kte+2):: sibvisdir,sibvisdif,sibnirdir,sibnirdif
+!  real, allocatable,dimension(its:ite,kts:kte+2):: swdkdir,swdkdif,swdkdirc
 
- real, allocatable,dimension(its:ite,kts:kte+1,nbndsw):: tauaer,ssaaer,asmaer
+!  real, allocatable,dimension(its:ite,kts:kte+1,nbndsw):: tauaer,ssaaer,asmaer
 
- real, allocatable,dimension(nbndsw,its:ite,kts:kte+1):: taucld,ssacld,asmcld,fsfcld
- real, allocatable,dimension(ngptsw,its:ite,kts:kte+1):: cldfmcl,clwpmcl,ciwpmcl,cswpmcl,taucmcl,ssacmcl,asmcmcl,fsfcmcl
+!  real, allocatable,dimension(nbndsw,its:ite,kts:kte+1):: taucld,ssacld,asmcld,fsfcld
+!  real, allocatable,dimension(ngptsw,its:ite,kts:kte+1):: cldfmcl,clwpmcl,ciwpmcl,cswpmcl,taucmcl,ssacmcl,asmcmcl,fsfcmcl
+
+ real, allocatable,dimension(:,:):: play,hlay,tlay,h2ovmr,o3vmr,co2vmr,o2vmr,ch4vmr,n2ovmr
+   real, allocatable,dimension(:,:):: clwpth,ciwpth,cswpth,rel,rei,res,cldfrac,relqmcl,reicmcl,resnmcl
+   real, allocatable,dimension(:,:):: swhr,swhrc
+   real, allocatable,dimension(:,:):: plev,tlev
+   real, allocatable,dimension(:,:):: swuflx,swdflx,swuflxc,swdflxc
+   real, allocatable,dimension(:,:):: swuflxcln,swdflxcln
+   real, allocatable,dimension(:,:):: sibvisdir,sibvisdif,sibnirdir,sibnirdif
+   real, allocatable,dimension(:,:):: swdkdir,swdkdif,swdkdirc
+   real, allocatable,dimension(:,:,:):: tauaer,ssaaer,asmaer
+   real, allocatable,dimension(:,:,:):: taucld,ssacld,asmcld,fsfcld
+   real, allocatable,dimension(:,:,:):: cldfmcl,clwpmcl,ciwpmcl,cswpmcl,taucmcl,ssacmcl,asmcmcl,fsfcmcl
 
 !--- additional local variables and arrays needed for the CAM ozone climatologyL
  real,dimension(1:noznlevels):: o3clim1d
