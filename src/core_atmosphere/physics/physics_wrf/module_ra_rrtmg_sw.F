@@ -9452,11 +9452,11 @@ do iplon = 1, ncol
       do i=1,nlayers
          do ig=1,ngptsw
             do iplon = 1, ncol
-               zcldfmc(iplon,i,ig) = cldfmc(ig,i)
-               ztaucmc(iplon,i,ig) = taucmc(ig,i)
-               ztaormc(iplon,i,ig) = taormc(ig,i)
-               zasycmc(iplon,i,ig) = asmcmc(ig,i)
-               zomgcmc(iplon,i,ig) = ssacmc(ig,i)
+               zcldfmc(iplon,i,ig) = cldfmc(iplon,ig,i)
+               ztaucmc(iplon,i,ig) = taucmc(iplon,ig,i)
+               ztaormc(iplon,i,ig) = taormc(iplon,ig,i)
+               zasycmc(iplon,i,ig) = asmcmc(iplon,ig,i)
+               zomgcmc(iplon,i,ig) = ssacmc(iplon,ig,i)
             enddo
          enddo
       enddo
@@ -9512,7 +9512,7 @@ do iplon = 1, ncol
          do i = 1 ,nlayers
             do iplon = 1, ncol
                ztaua(iplon,i,ib) = taua(i,ib)
-               ztauacln(i,ib) = 0.0
+               ztauacln(iplon,i,ib) = 0.0
                zasya(iplon,i,ib) = asma(i,ib)
                zomga(iplon,i,ib) = ssaa(i,ib)
             enddo
@@ -9544,7 +9544,7 @@ do iplon = 1, ncol
    enddo
 
    call spcvmc_sw &
-         (nlayers, istart, iend, icpr, iout, &
+         (ncol,nlayers, istart, iend, icpr, iout, &
          pavel, tavel, pz, tz, tbound, albdif, albdir, &
          zcldfmc, ztaucmc, zasycmc, zomgcmc, ztaormc, &
          ztaua, zasya, zomga, cossza, coldry, wkl, adjflux, &	 
@@ -9560,30 +9560,30 @@ do iplon = 1, ncol
 
    do i = 1, nlayers+1
       do iplon = 1, ncol
-         swuflxc(iplon,i) = zbbcu(i)
-         swdflxc(iplon,i) = zbbcd(i)
-         swuflx(iplon,i) = zbbfu(i)
-         swdflx(iplon,i) = zbbfd(i)
-         uvdflx(i) = zuvfd(i)
-         nidflx(i) = znifd(i)
+         swuflxc(iplon,i) = zbbcu(iplon,i)
+         swdflxc(iplon,i) = zbbcd(iplon,i)
+         swuflx(iplon,i) = zbbfu(iplon,i)
+         swdflx(iplon,i) = zbbfd(iplon,i)
+         uvdflx(i) = zuvfd(iplon,i)
+         nidflx(i) = znifd(iplon,i)
 
 !  Direct/diffuse fluxes
-         dirdflux(i) = zbbfddir(i)
+         dirdflux(i) = zbbfddir(iplon,i)
          difdflux(i) = swdflx(iplon,i) - dirdflux(i)
          swdkdir(iplon,i) = dirdflux(i) ! all-sky direct flux   jararias, 2013/08/10
          swdkdif(iplon,i) = difdflux(i) ! all-sky diffuse flux  jararias, 2013/08/10
-         swdkdirc(iplon,i) = zbbcddir(i) ! PAJ: clear-sky direct flux
+         swdkdirc(iplon,i) = zbbcddir(iplon,i) ! PAJ: clear-sky direct flux
 
 !  UV/visible direct/diffuse fluxes
-         dirdnuv(i) = zuvfddir(i)
+         dirdnuv(i) = zuvfddir(iplon,i)
          difdnuv(i) = zuvfd(i) - dirdnuv(i)
 !  ------- Zhenxin add vis/uv downwards dir or dif here --!
          sibvisdir(iplon,i) = dirdnuv(i)
          sibvisdif(iplon,i) = difdnuv(i)
 !  ----- End of Zhenxin addition  ------------!
 !  Near-IR direct/diffuse fluxes
-         dirdnir(i) = znifddir(i)
-         difdnir(i) = znifd(i) - dirdnir(i)
+         dirdnir(i) = znifddir(iplon,i)
+         difdnir(i) = znifd(iplon,i) - dirdnir(i)
 !  ---------Zhenxin add nir downwards dir and dif here --!
          sibnirdir(iplon,i) = dirdnir(i)
          sibnirdif(iplon,i) = difdnir(i)
