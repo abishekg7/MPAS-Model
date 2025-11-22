@@ -2592,7 +2592,7 @@
 
 ! ------- Input -------
 
-      integer, intent(in) :: nlayers
+      integer(kind=im), intent(in) :: nlayers
       integer, intent(in) :: ncol
       logical, intent(in) :: lrtchk(ncol,nlayers)                ! Logical flag for reflectivity and
                                                                  ! and transmissivity calculation; 
@@ -2631,7 +2631,8 @@
       real(kind=rb) :: zrk, zrk2, zrkg, zrm1, zrp, zrp1, zrpp
       real(kind=rb) :: zsr3, zt1, zt2, zt3, zt4, zt5, zto1
       real(kind=rb) :: zw, zwcrit, zwo
-      real(kind=rb) :: temp1
+      real(kind=rb) :: denom
+
       real(kind=rb), parameter :: eps = 1.e-08_rb
 
 !     ------------------------------------------------------------------
