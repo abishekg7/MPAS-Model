@@ -9576,7 +9576,7 @@ do iplon = 1, ncol
 
 !  UV/visible direct/diffuse fluxes
          dirdnuv(i) = zuvfddir(iplon,i)
-         difdnuv(i) = zuvfd(i) - dirdnuv(i)
+         difdnuv(i) = zuvfd(iplon,i) - dirdnuv(i)
 !  ------- Zhenxin add vis/uv downwards dir or dif here --!
          sibvisdir(iplon,i) = dirdnuv(i)
          sibvisdif(iplon,i) = difdnuv(i)
@@ -9602,7 +9602,7 @@ do iplon = 1, ncol
 !  Total and clear sky heating rates
    do i = 1, nlayers
       do iplon = 1, ncol
-         zdpgcp = heatfac / pdp(i)
+         zdpgcp = heatfac / pdp(iplon,i)
          swhrc(iplon,i) = (swnflxc(i+1) - swnflxc(i)) * zdpgcp
          swhr(iplon,i) = (swnflx(i+1) - swnflx(i)) * zdpgcp
       enddo
