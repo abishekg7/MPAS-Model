@@ -9178,7 +9178,7 @@
       integer(kind=im) :: layswtch(ncol)            ! tropopause layer index
       integer(kind=im) :: laylow(ncol)              ! tropopause layer index
       integer(kind=im) :: jp(ncol,nlay+1)          ! 
-      integer(kind=im) :: jt(ncolnlay+1)          !
+      integer(kind=im) :: jt(ncol,nlay+1)          !
       integer(kind=im) :: jt1(ncol,nlay+1)         !
 
       real(kind=rb) :: colh2o(ncol,nlay+1)         ! column amount (h2o)
@@ -9373,17 +9373,18 @@
 !  in cldprop.  Cloud fraction, water path, liquid droplet and ice particle
 !  effective radius must be passed in cldprop.  Cloud fraction and cloud
 !  optical properties are transferred to rrtmg_sw arrays in cldprop.  
+do iplon = 1, ncol
 
-         call cldprmc_sw(nlayers, inflag, iceflag, liqflag, cldfmc, &
-                         ciwpmc, clwpmc, cswpmc, reicmc, relqmc, resnmc, &
-                         taormc, taucmc, ssacmc, asmcmc, fsfcmc)
+         call cldprmc_sw(nlayers, inflag, iceflag, liqflag, cldfmc(iplon,:,:), &
+                         ciwpmc(iplon,:,:), clwpmc(iplon,:,:), cswpmc(iplon,:,:), reicmc(iplon,:), relqmc(iplon,:), resnmc(iplon,:), &
+                         taormc(iplon,:,:), taucmc(iplon,:,:), ssacmc(iplon,:,:), asmcmc(iplon,:,:), fsfcmc(iplon,:,:))
          icpr = 1
 
 
          ! This is the main longitude/column loop in RRTMG.
    ! Modify to loop over all columns (nlon) or over daylight columns
 
-   do iplon = 1, ncol
+   
 
 
 ! Calculate coefficients for the temperature and pressure dependence of the 
