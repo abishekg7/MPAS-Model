@@ -10294,7 +10294,9 @@ nlay = (kte-kts+1) + 1
        end if  
 
       end do
-   end do 
+   end do
+   
+   ncol = ncols_day
 
 
    allocate(tsfc(ncol))
@@ -10522,7 +10524,7 @@ allocate(clwpth(ncol,kts:kte+1),ciwpth(ncol,kts:kte+1),cswpth(ncol,kts:kte+1), &
           !--- set solar constant:
           scon = solcon
           !--- set cosine of solar zenith angle:
-          coszen(icol) = coszrs
+          coszen(icol) = coszr(i,1) 
 
          enddo
           !--- in MPAS, the solar constant is already provided with eccentricity adjustment, so do not do
@@ -10785,7 +10787,7 @@ allocate(clwpth(ncol,kts:kte+1),ciwpth(ncol,kts:kte+1),cswpth(ncol,kts:kte+1), &
 
           if(present(swddir) .and. present(swddni) .and. present(swddif)) then
              swddir(i,j)  = swdkdir(icol,1)          ! jararias 2013/08/10
-             swddni(i,j)  = swddir(icol,j) / coszrs  ! jararias 2013/08/10
+             swddni(i,j)  = swddir(icol,j) / coszen(icol)  ! jararias 2013/08/10
              swddif(i,j)  = swdkdif(icol,1)          ! jararias 2013/08/10
           endif
 
