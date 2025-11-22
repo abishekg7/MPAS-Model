@@ -1481,7 +1481,7 @@
 
 ! Stochastic cloud generator variables [mcica]
       integer(kind=im), parameter :: nsubcsw = ngptsw ! number of sub-columns (g-point intervals)
-      integer(kind=im) :: ilev                        ! loop index
+      integer(kind=im) :: ilev, icol                        ! loop index
 
       real(kind=rb) :: pmid(ncol,nlay)                ! layer pressures (Pa) 
 !      real(kind=rb) :: pdel(ncol,nlay)               ! layer pressure thickness (Pa) 
@@ -8026,7 +8026,7 @@
 ! ------- Modules -------
 
       use parkind, only: im => kind_im, rb => kind_rb
-!      use parrrsw, only: ngptsw
+      use parrrsw, only: ngptsw
 
       implicit none
 
@@ -8777,7 +8777,6 @@
                      puvcddir(iplon,ikl) = puvcddir(iplon,ikl) + zincflx(iplon,iw(iplon))*ztdbtc_nodel(iplon,jk)
                   enddo
 ! Accumulate direct fluxes for near-IR bands
-                  enddo
                else if (ibm == 14 .or. ibm <= 9) then  
                   do iplon=1,ncol
                      pnicd(iplon,ikl) = pnicd(iplon,ikl) + zincflx(iplon,iw(iplon))*zcd(iplon,jk,iw(iplon))
