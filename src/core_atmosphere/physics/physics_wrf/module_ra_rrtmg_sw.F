@@ -9345,6 +9345,8 @@
       iaer = 6
       endif
 
+      nlayers = nlay
+
 ! Call model and data initialization, compute lookup tables, perform
 ! reduction of g-points from 224 to 112 for input absorption
 ! coefficient data and other arrays.
