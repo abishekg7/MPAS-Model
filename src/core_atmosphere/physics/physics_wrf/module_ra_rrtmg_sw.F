@@ -9152,54 +9152,54 @@
       real(kind=rb) :: zdpgcp                 ! flux to heating conversion ratio
 
 ! Atmosphere
-      real(kind=rb) :: pavel(nlay+1)          ! layer pressures (mb) 
-      real(kind=rb) :: tavel(nlay+1)          ! layer temperatures (K)
-      real(kind=rb) :: pz(0:nlay+1)           ! level (interface) pressures (hPa, mb)
-      real(kind=rb) :: tz(0:nlay+1)           ! level (interface) temperatures (K)
-      real(kind=rb) :: tbound                 ! surface temperature (K)
-      real(kind=rb) :: pdp(nlay+1)            ! layer pressure thickness (hPa, mb)
-      real(kind=rb) :: coldry(nlay+1)         ! dry air column amount
-      real(kind=rb) :: wkl(mxmol,nlay+1)      ! molecular amounts (mol/cm-2)
+      real(kind=rb) :: pavel(ncol,nlay+1)          ! layer pressures (mb) 
+      real(kind=rb) :: tavel(ncol,nlay+1)          ! layer temperatures (K)
+      real(kind=rb) :: pz(ncol,0:nlay+1)           ! level (interface) pressures (hPa, mb)
+      real(kind=rb) :: tz(ncol,0:nlay+1)           ! level (interface) temperatures (K)
+      real(kind=rb) :: tbound(ncol)                ! surface temperature (K)
+      real(kind=rb) :: pdp(ncol,nlay+1)            ! layer pressure thickness (hPa, mb)
+      real(kind=rb) :: coldry(ncol,nlay+1)         ! dry air column amount
+      real(kind=rb) :: wkl(ncol,mxmol,nlay+1)      ! molecular amounts (mol/cm-2)
 
 !      real(kind=rb) :: earth_sun             ! function for Earth/Sun distance factor
       real(kind=rb), dimension(ncol) :: cossza                 ! Cosine of solar zenith angle
-      real(kind=rb) :: adjflux(jpband)        ! adjustment for current Earth/Sun distance
+      real(kind=rb) :: adjflux(ncol,jpband)        ! adjustment for current Earth/Sun distance
       real(kind=rb) :: solvar(jpband)         ! solar constant scaling factor from rrtmg_sw
                                               !  default value of 1368.22 Wm-2 at 1 AU
-      real(kind=rb) :: albdir(nbndsw)         ! surface albedo, direct          ! zalbp
-      real(kind=rb) :: albdif(nbndsw)         ! surface albedo, diffuse         ! zalbd
+      real(kind=rb) :: albdir(ncol,nbndsw)         ! surface albedo, direct          ! zalbp
+      real(kind=rb) :: albdif(ncol,nbndsw)         ! surface albedo, diffuse         ! zalbd
 
       real(kind=rb) :: taua(nlay+1,nbndsw)    ! Aerosol optical depth
       real(kind=rb) :: ssaa(nlay+1,nbndsw)    ! Aerosol single scattering albedo
       real(kind=rb) :: asma(nlay+1,nbndsw)    ! Aerosol asymmetry parameter
 
 ! Atmosphere - setcoef
-      integer(kind=im) :: laytrop             ! tropopause layer index
-      integer(kind=im) :: layswtch            ! tropopause layer index
-      integer(kind=im) :: laylow              ! tropopause layer index
-      integer(kind=im) :: jp(nlay+1)          ! 
-      integer(kind=im) :: jt(nlay+1)          !
-      integer(kind=im) :: jt1(nlay+1)         !
+      integer(kind=im) :: laytrop(ncol)             ! tropopause layer index
+      integer(kind=im) :: layswtch(ncol)            ! tropopause layer index
+      integer(kind=im) :: laylow(ncol)              ! tropopause layer index
+      integer(kind=im) :: jp(ncol,nlay+1)          ! 
+      integer(kind=im) :: jt(ncolnlay+1)          !
+      integer(kind=im) :: jt1(ncol,nlay+1)         !
 
-      real(kind=rb) :: colh2o(nlay+1)         ! column amount (h2o)
-      real(kind=rb) :: colco2(nlay+1)         ! column amount (co2)
-      real(kind=rb) :: colo3(nlay+1)          ! column amount (o3)
-      real(kind=rb) :: coln2o(nlay+1)         ! column amount (n2o)
-      real(kind=rb) :: colch4(nlay+1)         ! column amount (ch4)
-      real(kind=rb) :: colo2(nlay+1)          ! column amount (o2)
-      real(kind=rb) :: colmol(nlay+1)         ! column amount
-      real(kind=rb) :: co2mult(nlay+1)        ! column amount 
+      real(kind=rb) :: colh2o(ncol,nlay+1)         ! column amount (h2o)
+      real(kind=rb) :: colco2(ncol,nlay+1)         ! column amount (co2)
+      real(kind=rb) :: colo3(ncol,nlay+1)          ! column amount (o3)
+      real(kind=rb) :: coln2o(ncol,nlay+1)         ! column amount (n2o)
+      real(kind=rb) :: colch4(ncol,nlay+1)         ! column amount (ch4)
+      real(kind=rb) :: colo2(ncol,nlay+1)          ! column amount (o2)
+      real(kind=rb) :: colmol(ncol,nlay+1)         ! column amount
+      real(kind=rb) :: co2mult(ncol,nlay+1)        ! column amount 
 
-      integer(kind=im) :: indself(nlay+1)
-      integer(kind=im) :: indfor(nlay+1)
-      real(kind=rb) :: selffac(nlay+1)
-      real(kind=rb) :: selffrac(nlay+1)
-      real(kind=rb) :: forfac(nlay+1)
-      real(kind=rb) :: forfrac(nlay+1)
+      integer(kind=im) :: indself(ncol,nlay+1)
+      integer(kind=im) :: indfor(ncol,nlay+1)
+      real(kind=rb) :: selffac(ncol,nlay+1)
+      real(kind=rb) :: selffrac(ncol,nlay+1)
+      real(kind=rb) :: forfac(ncol,nlay+1)
+      real(kind=rb) :: forfrac(ncol,nlay+1)
 
       real(kind=rb) :: &                      !
-                         fac00(nlay+1), fac01(nlay+1), &
-                         fac10(nlay+1), fac11(nlay+1) 
+                         fac00(ncol,nlay+1), fac01(ncol,nlay+1), &
+                         fac10(ncol,nlay+1), fac11(ncol,nlay+1) 
 
 ! Atmosphere/clouds - cldprop
       integer(kind=im) :: ncbands             ! number of cloud spectral bands
@@ -9223,57 +9223,57 @@
 !      real(kind=rb) :: asmcloud(nlay+1,jpband)  ! in-cloud asymmetry parameter
 
 ! Atmosphere/clouds - cldprmc [mcica]
-      real(kind=rb) :: cldfmc(ngptsw,nlay+1)    ! cloud fraction [mcica]
-      real(kind=rb) :: ciwpmc(ngptsw,nlay+1)    ! in-cloud ice water path [mcica]
-      real(kind=rb) :: clwpmc(ngptsw,nlay+1)    ! in-cloud liquid water path [mcica]
-      real(kind=rb) :: cswpmc(ngptsw,nlay+1)    ! in-cloud snow water path [mcica]
-      real(kind=rb) :: relqmc(nlay+1)           ! liquid particle effective radius (microns)
-      real(kind=rb) :: reicmc(nlay+1)           ! ice particle effective size (microns)
-      real(kind=rb) :: resnmc(nlay+1)           ! snow particle effective size (microns)
-      real(kind=rb) :: taucmc(ngptsw,nlay+1)    ! in-cloud optical depth [mcica]
-      real(kind=rb) :: taormc(ngptsw,nlay+1)    ! unscaled in-cloud optical depth [mcica]
-      real(kind=rb) :: ssacmc(ngptsw,nlay+1)    ! in-cloud single scattering albedo [mcica]
-      real(kind=rb) :: asmcmc(ngptsw,nlay+1)    ! in-cloud asymmetry parameter [mcica]
-      real(kind=rb) :: fsfcmc(ngptsw,nlay+1)    ! in-cloud forward scattering fraction [mcica]
+      real(kind=rb) :: cldfmc(ncol,ngptsw,nlay+1)    ! cloud fraction [mcica]
+      real(kind=rb) :: ciwpmc(ncol,ngptsw,nlay+1)    ! in-cloud ice water path [mcica]
+      real(kind=rb) :: clwpmc(ncol,ngptsw,nlay+1)    ! in-cloud liquid water path [mcica]
+      real(kind=rb) :: cswpmc(ncol,ngptsw,nlay+1)    ! in-cloud snow water path [mcica]
+      real(kind=rb) :: relqmc(ncol,nlay+1)           ! liquid particle effective radius (microns)
+      real(kind=rb) :: reicmc(ncol,nlay+1)           ! ice particle effective size (microns)
+      real(kind=rb) :: resnmc(ncol,nlay+1)           ! snow particle effective size (microns)
+      real(kind=rb) :: taucmc(ncol,ngptsw,nlay+1)    ! in-cloud optical depth [mcica]
+      real(kind=rb) :: taormc(ncol,ngptsw,nlay+1)    ! unscaled in-cloud optical depth [mcica]
+      real(kind=rb) :: ssacmc(ncol,ngptsw,nlay+1)    ! in-cloud single scattering albedo [mcica]
+      real(kind=rb) :: asmcmc(ncol,ngptsw,nlay+1)    ! in-cloud asymmetry parameter [mcica]
+      real(kind=rb) :: fsfcmc(ncol,ngptsw,nlay+1)    ! in-cloud forward scattering fraction [mcica]
 
 ! Atmosphere/clouds/aerosol - spcvrt,spcvmc
-      real(kind=rb) :: ztauc(nlay+1,nbndsw)     ! cloud optical depth
-      real(kind=rb) :: ztaucorig(nlay+1,nbndsw) ! unscaled cloud optical depth
-      real(kind=rb) :: zasyc(nlay+1,nbndsw)     ! cloud asymmetry parameter 
+      real(kind=rb) :: ztauc(ncol,nlay+1,nbndsw)     ! cloud optical depth
+      real(kind=rb) :: ztaucorig(ncol,nlay+1,nbndsw) ! unscaled cloud optical depth
+      real(kind=rb) :: zasyc(ncol,nlay+1,nbndsw)     ! cloud asymmetry parameter 
                                                 !  (first moment of phase function)
-      real(kind=rb) :: zomgc(nlay+1,nbndsw)     ! cloud single scattering albedo
-      real(kind=rb) :: ztaua(nlay+1,nbndsw)     ! total aerosol optical depth
-      real(kind=rb) :: ztauacln(nlay+1,nbndsw)  ! dummy total aerosol optical depth for clean case (=zero)
-      real(kind=rb) :: zasya(nlay+1,nbndsw)     ! total aerosol asymmetry parameter 
-      real(kind=rb) :: zomga(nlay+1,nbndsw)     ! total aerosol single scattering albedo
+      real(kind=rb) :: zomgc(ncol,nlay+1,nbndsw)     ! cloud single scattering albedo
+      real(kind=rb) :: ztaua(ncol,nlay+1,nbndsw)     ! total aerosol optical depth
+      real(kind=rb) :: ztauacln(ncol,nlay+1,nbndsw)  ! dummy total aerosol optical depth for clean case (=zero)
+      real(kind=rb) :: zasya(ncol,nlay+1,nbndsw)     ! total aerosol asymmetry parameter 
+      real(kind=rb) :: zomga(ncol,nlay+1,nbndsw)     ! total aerosol single scattering albedo
 
-      real(kind=rb) :: zcldfmc(nlay+1,ngptsw)   ! cloud fraction [mcica]
-      real(kind=rb) :: ztaucmc(nlay+1,ngptsw)   ! cloud optical depth [mcica]
-      real(kind=rb) :: ztaormc(nlay+1,ngptsw)   ! unscaled cloud optical depth [mcica]
-      real(kind=rb) :: zasycmc(nlay+1,ngptsw)   ! cloud asymmetry parameter [mcica] 
-      real(kind=rb) :: zomgcmc(nlay+1,ngptsw)   ! cloud single scattering albedo [mcica]
+      real(kind=rb) :: zcldfmc(ncol,nlay+1,ngptsw)   ! cloud fraction [mcica]
+      real(kind=rb) :: ztaucmc(ncol,nlay+1,ngptsw)   ! cloud optical depth [mcica]
+      real(kind=rb) :: ztaormc(ncol,nlay+1,ngptsw)   ! unscaled cloud optical depth [mcica]
+      real(kind=rb) :: zasycmc(ncol,nlay+1,ngptsw)   ! cloud asymmetry parameter [mcica] 
+      real(kind=rb) :: zomgcmc(ncol,nlay+1,ngptsw)   ! cloud single scattering albedo [mcica]
 
-      real(kind=rb) :: zbbfu(nlay+2)          ! temporary upward shortwave flux (w/m2)
-      real(kind=rb) :: zbbfd(nlay+2)          ! temporary downward shortwave flux (w/m2)
-      real(kind=rb) :: zbbcu(nlay+2)          ! temporary clear sky upward shortwave flux (w/m2)
-      real(kind=rb) :: zbbcd(nlay+2)          ! temporary clear sky downward shortwave flux (w/m2)
-      real(kind=rb) :: zbbfddir(nlay+2)       ! temporary downward direct shortwave flux (w/m2)
-      real(kind=rb) :: zbbcddir(nlay+2)       ! temporary clear sky downward direct shortwave flux (w/m2)
-      real(kind=rb) :: zuvfd(nlay+2)          ! temporary UV downward shortwave flux (w/m2)
-      real(kind=rb) :: zuvcd(nlay+2)          ! temporary clear sky UV downward shortwave flux (w/m2)
-      real(kind=rb) :: zuvfddir(nlay+2)       ! temporary UV downward direct shortwave flux (w/m2)
-      real(kind=rb) :: zuvcddir(nlay+2)       ! temporary clear sky UV downward direct shortwave flux (w/m2)
-      real(kind=rb) :: znifd(nlay+2)          ! temporary near-IR downward shortwave flux (w/m2)
-      real(kind=rb) :: znicd(nlay+2)          ! temporary clear sky near-IR downward shortwave flux (w/m2)
-      real(kind=rb) :: znifddir(nlay+2)       ! temporary near-IR downward direct shortwave flux (w/m2)
-      real(kind=rb) :: znicddir(nlay+2)       ! temporary clear sky near-IR downward direct shortwave flux (w/m2)
-      real(kind=rb) :: zbbclnu(nlay+2)        ! temporary clean sky upward shortwave flux (w/m2)
-      real(kind=rb) :: zbbclnd(nlay+2)        ! temporary clean sky downward shortwave flux (w/m2)
-      real(kind=rb) :: zbbclnddir(nlay+2)     ! temporary clean sky downward direct shortwave flux (w/m2)
-      real(kind=rb) :: zuvclnd(nlay+2)        ! temporary clean sky UV downward shortwave flux (w/m2)
-      real(kind=rb) :: zuvclnddir(nlay+2)     ! temporary clean sky UV downward direct shortwave flux (w/m2)
-      real(kind=rb) :: zniclnd(nlay+2)        ! temporary clean sky near-IR downward shortwave flux (w/m2)
-      real(kind=rb) :: zniclnddir(nlay+2)     ! temporary clean sky near-IR downward direct shortwave flux (w/m2)
+      real(kind=rb) :: zbbfu(ncol,nlay+2)          ! temporary upward shortwave flux (w/m2)
+      real(kind=rb) :: zbbfd(ncol,nlay+2)          ! temporary downward shortwave flux (w/m2)
+      real(kind=rb) :: zbbcu(ncol,nlay+2)          ! temporary clear sky upward shortwave flux (w/m2)
+      real(kind=rb) :: zbbcd(ncol,nlay+2)          ! temporary clear sky downward shortwave flux (w/m2)
+      real(kind=rb) :: zbbfddir(ncol,nlay+2)       ! temporary downward direct shortwave flux (w/m2)
+      real(kind=rb) :: zbbcddir(ncol,nlay+2)       ! temporary clear sky downward direct shortwave flux (w/m2)
+      real(kind=rb) :: zuvfd(ncol,nlay+2)          ! temporary UV downward shortwave flux (w/m2)
+      real(kind=rb) :: zuvcd(ncol,nlay+2)          ! temporary clear sky UV downward shortwave flux (w/m2)
+      real(kind=rb) :: zuvfddir(ncol,nlay+2)       ! temporary UV downward direct shortwave flux (w/m2)
+      real(kind=rb) :: zuvcddir(ncol,nlay+2)       ! temporary clear sky UV downward direct shortwave flux (w/m2)
+      real(kind=rb) :: znifd(ncol,nlay+2)          ! temporary near-IR downward shortwave flux (w/m2)
+      real(kind=rb) :: znicd(ncol,nlay+2)          ! temporary clear sky near-IR downward shortwave flux (w/m2)
+      real(kind=rb) :: znifddir(ncol,nlay+2)       ! temporary near-IR downward direct shortwave flux (w/m2)
+      real(kind=rb) :: znicddir(ncol,nlay+2)       ! temporary clear sky near-IR downward direct shortwave flux (w/m2)
+      real(kind=rb) :: zbbclnu(ncol,nlay+2)        ! temporary clean sky upward shortwave flux (w/m2)
+      real(kind=rb) :: zbbclnd(ncol,nlay+2)        ! temporary clean sky downward shortwave flux (w/m2)
+      real(kind=rb) :: zbbclnddir(ncol,nlay+2)     ! temporary clean sky downward direct shortwave flux (w/m2)
+      real(kind=rb) :: zuvclnd(ncol,nlay+2)        ! temporary clean sky UV downward shortwave flux (w/m2)
+      real(kind=rb) :: zuvclnddir(ncol,nlay+2)     ! temporary clean sky UV downward direct shortwave flux (w/m2)
+      real(kind=rb) :: zniclnd(ncol,nlay+2)        ! temporary clean sky near-IR downward shortwave flux (w/m2)
+      real(kind=rb) :: zniclnddir(ncol,nlay+2)     ! temporary clean sky near-IR downward direct shortwave flux (w/m2)
 
 ! Optional output fields 
       real(kind=rb) :: swnflx(nlay+2)         ! Total sky shortwave net flux (W/m2)
