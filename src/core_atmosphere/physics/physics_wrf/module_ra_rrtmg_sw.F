@@ -9703,7 +9703,7 @@ end subroutine rrtmg_sw
       end function earth_sun
 
 !***************************************************************************
-      subroutine inatm_sw (ncols, nlay, icld, iaer, &
+      subroutine inatm_sw (ncol, nlay, icld, iaer, &
             play, plev, tlay, tlev, tsfc, h2ovmr, &
             o3vmr, co2vmr, ch4vmr, n2ovmr, o2vmr, &
             adjes, dyofyr, scon, inflgsw, iceflgsw, liqflgsw, &
@@ -9730,7 +9730,7 @@ end subroutine rrtmg_sw
 ! ------- Declarations -------
 
    ! ----- Input -----
-      integer(kind=im), intent(in) :: ncols            ! number of columns
+      integer(kind=im), intent(in) :: ncol            ! number of columns
       integer(kind=im), intent(in) :: nlay            ! number of model layers
       integer(kind=im), intent(in) :: icld            ! clear/cloud and cloud overlap flag
       integer(kind=im), intent(in) :: iaer            ! aerosol option flag
@@ -9916,7 +9916,7 @@ end subroutine rrtmg_sw
    endif
 
 
-   do iplon = 1, ncols
+   do iplon = 1, ncol
       ! Set incoming solar flux adjustment to include adjustment for
    ! current Earth/Sun distance (ADJFLX) and scaling of default internal
    ! solar constant (rrsw_scon = 1368.22 Wm-2) by band (SOLVAR).  SOLVAR can be set 
