@@ -10654,7 +10654,7 @@ allocate(clwpth(ncol,kts:kte+1),ciwpth(ncol,kts:kte+1),cswpth(ncol,kts:kte+1), &
              if(iceflgsw .eq. 3)then
                 do k = kts, kte
                    !gicewp = (qi1d(k)+qs1d(k)) * pdel(ncol,k)*100.0 / gravmks * 1000.0 !grid box ice water path.
-                   cicewp(1:ncols_day,k) = (qi1d(k)+qs1d(k)) * pdel(1:ncols_day,k)*100.0 / gravmks * 1000.0. / max(0.01,cldfrac(1:ncols_day,k))                !in-cloud ice water path.
+                   cicewp(1:ncols_day,k) = (qi1d(k)+qs1d(k)) * pdel(1:ncols_day,k)*100.0 / gravmks * 1000.0 /max(0.01,cldfrac(1:ncols_day,k))                !in-cloud ice water path.
                 enddo
              elseif(iceflgsw .ge. 4) then
                 do k = kts, kte
