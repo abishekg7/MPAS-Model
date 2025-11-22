@@ -1450,7 +1450,7 @@
                                                       !    Dimensions: (ncol,nlay)
       integer(kind=im), intent(in) :: idcor           ! Decorrelation length type
       integer(kind=im), intent(in) :: juldat          ! Julian date (day of year, 1-365)
-      real(kind=rb),    intent(in) :: lat             ! latitude (degrees, -90 to 90)
+      real(kind=rb),    intent(in) :: lat(:)             ! latitude (degrees, -90 to 90)
 
 ! ----- Output -----
 ! Atmosphere/clouds - cldprmc [mcica]
@@ -1540,7 +1540,7 @@
 ! Latitude in radians, decorrelation length in meters
 !         decorr_len(:) = ( am1 + am2 * exp(-(lat*180._rb/pi - am3)**2 / (am4*am4)) ) * 1.e3_rb
 ! Latitude in degrees, decorrelation length in meters
-         decorr_len(icol) = ( am1 + am2 * exp(-(lat - am3)**2 / (am4*am4)) ) * 1.e3_rb
+         decorr_len(icol) = ( am1 + am2 * exp(-(lat(icol) - am3)**2 / (am4*am4)) ) * 1.e3_rb
          enddo
       else
 ! Spatially and temporally constant decorrelation length
@@ -10158,7 +10158,7 @@ CONTAINS
  integer:: iplon,irng,permuteseed
  integer:: pcols,pver
  integer:: idx_rei
- integer:: i,j,icolk,n
+ integer:: i,j,icolk,n, k
 
  real:: coszrs,xt24,tloctm,hrang,xxlat,adjes,scon
  real:: ro,dz
@@ -10654,8 +10654,7 @@ allocate(clwpth(ncol,kts:kte+1),ciwpth(ncol,kts:kte+1),cswpth(ncol,kts:kte+1), &
              if(iceflgsw .eq. 3)then
                 do k = kts, kte
                    !gicewp = (qi1d(k)+qs1d(k)) * pdel(ncol,k)*100.0 / gravmks * 1000.0 !grid box ice water path.
-                   cicewp(1:ncols_day,k) = (qi1d(k)+qs1d(k)) * pdel(1:ncols_day,k)*100.0 / gravmks * 1000.0.        &
-                                     / max(0.01,cldfrac(1:ncols_day,k))                !in-cloud ice water path.
+                   cicewp(1:ncols_day,k) = (qi1d(k)+qs1d(k)) * pdel(1:ncols_day,k)*100.0 / gravmks * 1000.0. / max(0.01,cldfrac(1:ncols_day,k))                !in-cloud ice water path.
                 enddo
              elseif(iceflgsw .ge. 4) then
                 do k = kts, kte
