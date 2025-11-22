@@ -2542,7 +2542,7 @@
       contains
 
 ! --------------------------------------------------------------------
-      subroutine reftra_sw(nlayers, lrtchk, pgg, prmuz, ptau, pw, &
+      subroutine reftra_sw(nlayers, ncol, lrtchk, pgg, prmuz, ptau, pw, &
                            pref, prefd, ptra, ptrad)
 ! --------------------------------------------------------------------
   
@@ -2559,7 +2559,7 @@
 !      lrtchk  = .t. for all layers in clear profile
 !      lrtchk  = .t. for cloudy layers in cloud profile 
 !              = .f. for clear layers in cloud profile
-!      pgg     = assymetry factor
+!      pgg     = asymmetry factor
 !      prmuz   = cosine solar zenith angle
 !      ptau    = optical thickness
 !      pw      = single scattering albedo
@@ -2585,7 +2585,6 @@
 ! Original: J-JMorcrette, ECMWF, Feb 2003
 ! Revised for F90 reformatting: MJIacono, AER, Jul 2006
 ! Revised to add exponential lookup table: MJIacono, AER, Aug 2007
-! Reformulated some code to avoid potential fpes: MJIacono, AER, Nov 2008
 !
 ! ------------------------------------------------------------------
 
@@ -2593,34 +2592,34 @@
 
 ! ------- Input -------
 
-      integer(kind=im), intent(in) :: nlayers
+      integer, intent(in) :: nlayers
+      integer, intent(in) :: ncol
+      logical, intent(in) :: lrtchk(ncol,nlayers)                ! Logical flag for reflectivity and
+                                                                 ! and transmissivity calculation; 
+                                                                 !   Dimensions: (nlayers)
 
-      logical, intent(in) :: lrtchk(:)                         ! Logical flag for reflectivity and
-                                                               ! and transmissivity calculation; 
-                                                               !   Dimensions: (nlayers)
-
-      real(kind=rb), intent(in) :: pgg(:)                      ! asymmetry parameter
-                                                               !   Dimensions: (nlayers)
-      real(kind=rb), intent(in) :: ptau(:)                     ! optical depth
-                                                               !   Dimensions: (nlayers)
-      real(kind=rb), intent(in) :: pw(:)                       ! single scattering albedo 
-                                                               !   Dimensions: (nlayers)
-      real(kind=rb), intent(in) :: prmuz                       ! cosine of solar zenith angle
+      real(kind=rb), intent(in) :: pgg(ncol,nlayers)             ! asymmetry parameter
+                                                                 !   Dimensions: (nlayers)
+      real(kind=rb), intent(in) :: ptau(ncol,nlayers)            ! optical depth
+                                                                 !   Dimensions: (nlayers)
+      real(kind=rb), intent(in) :: pw(ncol,nlayers)              ! single scattering albedo 
+                                                                 !   Dimensions: (nlayers)
+      real(kind=rb), intent(in) :: prmuz(ncol)                       ! cosine of solar zenith angle
 
 ! ------- Output -------
 
-      real(kind=rb), intent(inout) :: pref(:)                  ! direct beam reflectivity
-                                                               !   Dimensions: (nlayers+1)
-      real(kind=rb), intent(inout) :: prefd(:)                 ! diffuse beam reflectivity
-                                                               !   Dimensions: (nlayers+1)
-      real(kind=rb), intent(inout) :: ptra(:)                  ! direct beam transmissivity
-                                                               !   Dimensions: (nlayers+1)
-      real(kind=rb), intent(inout) :: ptrad(:)                 ! diffuse beam transmissivity
-                                                               !   Dimensions: (nlayers+1)
+      real(kind=rb), intent(inout) :: pref(ncol,nlayers+1)       ! direct beam reflectivity
+                                                                 !   Dimensions: (nlayers+1)
+      real(kind=rb), intent(inout) :: prefd(ncol,nlayers+1)      ! diffuse beam reflectivity
+                                                                 !   Dimensions: (nlayers+1)
+      real(kind=rb), intent(inout) :: ptra(ncol,nlayers+1)       ! direct beam transmissivity
+                                                                 !   Dimensions: (nlayers+1)
+      real(kind=rb), intent(inout) :: ptrad(ncol,nlayers+1)      ! diffuse beam transmissivity
+                                                                 !   Dimensions: (nlayers+1)
 
 ! ------- Local -------
 
-      integer(kind=im) :: jk, jl, kmodts
+      integer(kind=im) :: jk, icol, kmodts
       integer(kind=im) :: itind
 
       real(kind=rb) :: tblind
@@ -2632,129 +2631,122 @@
       real(kind=rb) :: zrk, zrk2, zrkg, zrm1, zrp, zrp1, zrpp
       real(kind=rb) :: zsr3, zt1, zt2, zt3, zt4, zt5, zto1
       real(kind=rb) :: zw, zwcrit, zwo
-      real(kind=rb) :: denom
-
+      real(kind=rb) :: temp1
       real(kind=rb), parameter :: eps = 1.e-08_rb
 
 !     ------------------------------------------------------------------
 
 ! Initialize
 
-!jm not thread safe      hvrrft = '$Revision: 1.3 $'
-
       zsr3=sqrt(3._rb)
       zwcrit=0.9999995_rb
       kmodts=2
 
       do jk=1, nlayers
-         if (.not.lrtchk(jk)) then
-            pref(jk) =0._rb
-            ptra(jk) =1._rb
-            prefd(jk)=0._rb
-            ptrad(jk)=1._rb
-         else
-            zto1=ptau(jk)
-            zw  =pw(jk)
-            zg  =pgg(jk)  
+         do icol = 1,ncol
+            if (.not.lrtchk(icol,jk)) then
+               pref(icol,jk) =0._rb
+               ptra(icol,jk) =1._rb
+               prefd(icol,jk)=0._rb
+               ptrad(icol,jk)=1._rb
+            else
+               zto1=ptau(icol,jk)
+               zw  =pw(icol,jk)
+               zg  =pgg(icol,jk)  
 
 ! General two-stream expressions
 
-            zg3= 3._rb * zg
-            if (kmodts == 1) then
-               zgamma1= (7._rb - zw * (4._rb + zg3)) * 0.25_rb
-               zgamma2=-(1._rb - zw * (4._rb - zg3)) * 0.25_rb
-               zgamma3= (2._rb - zg3 * prmuz ) * 0.25_rb
-            else if (kmodts == 2) then  
-               zgamma1= (8._rb - zw * (5._rb + zg3)) * 0.25_rb
-               zgamma2=  3._rb *(zw * (1._rb - zg )) * 0.25_rb
-               zgamma3= (2._rb - zg3 * prmuz ) * 0.25_rb
-            else if (kmodts == 3) then  
-               zgamma1= zsr3 * (2._rb - zw * (1._rb + zg)) * 0.5_rb
-               zgamma2= zsr3 * zw * (1._rb - zg ) * 0.5_rb
-               zgamma3= (1._rb - zsr3 * zg * prmuz ) * 0.5_rb
-            end if
-            zgamma4= 1._rb - zgamma3
+               zg3= 3._rb * zg
+               if (kmodts == 1) then
+                  zgamma1= (7._rb - zw * (4._rb + zg3)) * 0.25_rb
+                  zgamma2=-(1._rb - zw * (4._rb - zg3)) * 0.25_rb
+                  zgamma3= (2._rb - zg3 * prmuz(icol) ) * 0.25_rb
+               else if (kmodts == 2) then  
+                  zgamma1= (8._rb - zw * (5._rb + zg3)) * 0.25_rb
+                  zgamma2=  3._rb *(zw * (1._rb - zg )) * 0.25_rb
+                  zgamma3= (2._rb - zg3 * prmuz(icol) ) * 0.25_rb
+               else if (kmodts == 3) then  
+                  zgamma1= zsr3 * (2._rb - zw * (1._rb + zg)) * 0.5_rb
+                  zgamma2= zsr3 * zw * (1._rb - zg ) * 0.5_rb
+                  zgamma3= (1._rb - zsr3 * zg * prmuz(icol) ) * 0.5_rb
+               end if
+               zgamma4= 1._rb - zgamma3
     
 ! Recompute original s.s.a. to test for conservative solution
             zwo = 0._rb
             denom = 1._rb
             if (zg .ne. 1._rb) denom = (1._rb - (1._rb - zw) * (zg / (1._rb - zg))**2)
             if (zw .gt. 0._rb .and. denom .ne. 0._rb) zwo = zw / denom
-
-            if (zwo >= zwcrit) then
+               
+               if (zwo >= zwcrit) then
 ! Conservative scattering
 
-               za  = zgamma1 * prmuz 
-               za1 = za - zgamma3
-               zgt = zgamma1 * zto1
+                  za  = zgamma1 * prmuz(icol) 
+                  za1 = za - zgamma3
+                  zgt = zgamma1 * zto1
         
 ! Homogeneous reflectance and transmittance,
 ! collimated beam
 
-               ze1 = min ( zto1 / prmuz , 500._rb)
-!               ze2 = exp( -ze1 )
+                  ze1 = min ( zto1 / prmuz(icol) , 500._rb)
+                  ze2 = exp( -ze1 )
 
 ! Use exponential lookup table for transmittance, or expansion of 
 ! exponential for low tau
-               if (ze1 .le. od_lo) then 
-                  ze2 = 1._rb - ze1 + 0.5_rb * ze1 * ze1
-               else
-                  tblind = ze1 / (bpade + ze1)
-                  itind = tblint * tblind + 0.5_rb
-                  ze2 = exp_tbl(itind)
-               endif
-!
+              if (ze1 .le. od_lo) then 
+                 ze2 = 1._rb - ze1 + 0.5_rb * ze1 * ze1
+              else
+                 tblind = ze1 / (bpade + ze1)
+                 itind = tblint * tblind + 0.5_rb
+                 ze2 = exp_tbl(itind)
+              endif
 
-               pref(jk) = (zgt - za1 * (1._rb - ze2)) / (1._rb + zgt)
-               ptra(jk) = 1._rb - pref(jk)
+                  pref(icol,jk) = (zgt - za1 * (1._rb - ze2)) / ( 1._rb + zgt)
+                  ptra(icol,jk) = 1._rb - pref(icol,jk)
 
 ! isotropic incidence
 
-               prefd(jk) = zgt / (1._rb + zgt)
-               ptrad(jk) = 1._rb - prefd(jk)        
+                  prefd(icol,jk) = zgt / ( 1._rb + zgt)
+                  ptrad(icol,jk) = 1._rb - prefd(icol,jk)        
 
 ! This is applied for consistency between total (delta-scaled) and direct (unscaled) 
 ! calculations at very low optical depths (tau < 1.e-4) when the exponential lookup
 ! table returns a transmittance of 1.0.
-               if (ze2 .eq. 1.0_rb) then 
-                  pref(jk) = 0.0_rb
-                  ptra(jk) = 1.0_rb
-                  prefd(jk) = 0.0_rb
-                  ptrad(jk) = 1.0_rb
-               endif
+                  if (ze2 .eq. 1.0_rb) then 
+                     pref(icol,jk) = 0.0_rb
+                     ptra(icol,jk) = 1.0_rb
+                     prefd(icol,jk) = 0.0_rb
+                     ptrad(icol,jk) = 1.0_rb
+                  endif
 
-            else
+               else
 ! Non-conservative scattering
 
-               za1 = zgamma1 * zgamma4 + zgamma2 * zgamma3
-               za2 = zgamma1 * zgamma3 + zgamma2 * zgamma4
-               zrk = sqrt ( zgamma1**2 - zgamma2**2)
-               zrp = zrk * prmuz               
-               zrp1 = 1._rb + zrp
-               zrm1 = 1._rb - zrp
-               zrk2 = 2._rb * zrk
-               zrpp = 1._rb - zrp*zrp
-               zrkg = zrk + zgamma1
-               zr1  = zrm1 * (za2 + zrk * zgamma3)
-               zr2  = zrp1 * (za2 - zrk * zgamma3)
-               zr3  = zrk2 * (zgamma3 - za2 * prmuz )
-               zr4  = zrpp * zrkg
-               zr5  = zrpp * (zrk - zgamma1)
-               zt1  = zrp1 * (za1 + zrk * zgamma4)
-               zt2  = zrm1 * (za1 - zrk * zgamma4)
-               zt3  = zrk2 * (zgamma4 + za1 * prmuz )
-               zt4  = zr4
-               zt5  = zr5
-
-! mji - reformulated code to avoid potential floating point exceptions
-!               zbeta = - zr5 / zr4
-               zbeta = (zgamma1 - zrk) / zrkg
-!!
+                  za1 = zgamma1 * zgamma4 + zgamma2 * zgamma3
+                  za2 = zgamma1 * zgamma3 + zgamma2 * zgamma4
+                  zrk = sqrt ( zgamma1**2 - zgamma2**2)
+                  zrp = zrk * prmuz(icol)               
+                  zrp1 = 1._rb + zrp
+                  zrm1 = 1._rb - zrp
+                  zrk2 = 2._rb * zrk
+                  zrpp = 1._rb - zrp*zrp
+                  zrkg = zrk + zgamma1
+                  zr1  = zrm1 * (za2 + zrk * zgamma3)
+                  zr2  = zrp1 * (za2 - zrk * zgamma3)
+                  zr3  = zrk2 * (zgamma3 - za2 * prmuz(icol) )
+                  zr4  = zrpp * zrkg
+                  zr5  = zrpp * (zrk - zgamma1)
+                  zt1  = zrp1 * (za1 + zrk * zgamma4)
+                  zt2  = zrm1 * (za1 - zrk * zgamma4)
+                  zt3  = zrk2 * (zgamma4 + za1 * prmuz(icol) )
+                  zt4  = zr4
+                  zt5  = zr5
+                  zbeta = (zgamma1 - zrk) / zrkg !- zr5 / zr4
         
 ! Homogeneous reflectance and transmittance
 
-               ze1 = min ( zrk * zto1, 500._rb)
-               ze2 = min ( zto1 / prmuz , 500._rb)
+                  ze1 = min ( zrk * zto1, 500._rb)
+                  ze2 = min ( zto1 / prmuz(icol) , 500._rb)
 !
 ! Original
 !              zep1 = exp( ze1 )
@@ -2763,65 +2755,58 @@
 !              zem2 = exp(-ze2 )
 !
 ! Revised original, to reduce exponentials
-!              zep1 = exp( ze1 )
-!              zem1 = 1._rb / zep1
-!              zep2 = exp( ze2 )
-!              zem2 = 1._rb / zep2
+                  zep1 = exp( ze1 )
+                  zem1 = 1._rb / zep1
+                  zep2 = exp( ze2 )
+                  zem2 = 1._rb / zep2
 !
 ! Use exponential lookup table for transmittance, or expansion of 
 ! exponential for low tau
-               if (ze1 .le. od_lo) then 
-                  zem1 = 1._rb - ze1 + 0.5_rb * ze1 * ze1
-                  zep1 = 1._rb / zem1
-               else
-                  tblind = ze1 / (bpade + ze1)
-                  itind = tblint * tblind + 0.5_rb
-                  zem1 = exp_tbl(itind)
-                  zep1 = 1._rb / zem1
-               endif
+              if (ze1 .le. od_lo) then 
+                 zem1 = 1._rb - ze1 + 0.5_rb * ze1 * ze1
+                 zep1 = 1._rb / zem1
+              else
+                 tblind = ze1 / (bpade + ze1)
+                 itind = tblint * tblind + 0.5_rb
+                 zem1 = exp_tbl(itind)
+                 zep1 = 1._rb / zem1
+              endif
 
-               if (ze2 .le. od_lo) then 
-                  zem2 = 1._rb - ze2 + 0.5_rb * ze2 * ze2
-                  zep2 = 1._rb / zem2
-               else
-                  tblind = ze2 / (bpade + ze2)
-                  itind = tblint * tblind + 0.5_rb
-                  zem2 = exp_tbl(itind)
-                  zep2 = 1._rb / zem2
-               endif
+              if (ze2 .le. od_lo) then 
+                 zem2 = 1._rb - ze2 + 0.5_rb * ze2 * ze2
+                 zep2 = 1._rb / zem2
+              else
+                 tblind = ze2 / (bpade + ze2)
+                 itind = tblint * tblind + 0.5_rb
+                 zem2 = exp_tbl(itind)
+                 zep2 = 1._rb / zem2
+              endif
 
 ! collimated beam
 
-! mji - reformulated code to avoid potential floating point exceptions
-!               zdenr = zr4*zep1 + zr5*zem1
-!               pref(jk) = zw * (zr1*zep1 - zr2*zem1 - zr3*zem2) / zdenr
-!               zdent = zt4*zep1 + zt5*zem1
-!               ptra(jk) = zem2 - zem2 * zw * (zt1*zep1 - zt2*zem1 - zt3*zep2) / zdent
-
-               zdenr = zr4*zep1 + zr5*zem1
-               zdent = zt4*zep1 + zt5*zem1
-               if (zdenr .ge. -eps .and. zdenr .le. eps) then
-                  pref(jk) = eps
-                  ptra(jk) = zem2
-               else
-                  pref(jk) = zw * (zr1*zep1 - zr2*zem1 - zr3*zem2) / zdenr
-                  ptra(jk) = zem2 - zem2 * zw * (zt1*zep1 - zt2*zem1 - zt3*zep2) / zdent
-               endif
-!!
+                  zdenr = zr4*zep1 + zr5*zem1
+                  zdent = zt4*zep1 + zt5*zem1
+                  if (zdenr .ge. -eps .and. zdenr .le. eps) then
+                     pref(icol,jk) = eps
+                     ptra(icol,jk) = zem2
+                  else
+                     pref(icol,jk) = zw * (zr1*zep1 - zr2*zem1 - zr3*zem2) / zdenr
+                     ptra(icol,jk) = zem2 - zem2 * zw * (zt1*zep1 - zt2*zem1 - zt3*zep2) / zdent
+                  endif 
 
 ! diffuse beam
 
-               zemm = zem1*zem1
-               zdend = 1._rb / ( (1._rb - zbeta*zemm ) * zrkg)
-               prefd(jk) =  zgamma2 * (1._rb - zemm) * zdend
-               ptrad(jk) =  zrk2*zem1*zdend
+                  zemm = zem1*zem1
+                  zdend = 1._rb / ( (1._rb - zbeta*zemm ) * zrkg)
+                  prefd(icol,jk) =  zgamma2 * (1._rb - zemm) * zdend
+                  ptrad(icol,jk) =  zrk2*zem1*zdend
 
-            endif
+               endif
 
-         endif         
+            endif         
 
-      enddo    
-
+         enddo    
+      end do
       end subroutine reftra_sw
 
       end module rrtmg_sw_reftra
