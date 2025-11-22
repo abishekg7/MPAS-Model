@@ -10454,77 +10454,77 @@ allocate(clwpth(ncol,kts:kte+1),ciwpth(ncol,kts:kte+1),cswpth(ncol,kts:kte+1), &
 
          do icol = 1,ncols_day
 
-          i = nday_index(icol)
-          j = 1
-          !--- fill local arrays with input sounding. convert water vapor mass mixing ratio to
-          !    volume mixing ratio:
-         do k = kts, kte+1
-             pw1d(k) = p8w(i,k,j) / 100.
-             tw1d(k) = t8w(i,k,j)
-          enddo
+            i = nday_index(icol)
+            j = 1
+            !--- fill local arrays with input sounding. convert water vapor mass mixing ratio to
+            !    volume mixing ratio:
+            do k = kts, kte+1
+               pw1d(k) = p8w(i,k,j) / 100.
+               tw1d(k) = t8w(i,k,j)
+            enddo
 
 
-          plev(icol,1) = p8w(i,1,1) / 100.
-          tlev(icol,1) = tw1d(1)
-          tsfc(icol)   = tsk(i,j)
-          do k = kts, kte
-             plev(icol,k+1)   = p3d(i,k+1,1) / 100.
-             tlev(icol,k+1)   = t3d(i,k+1,1)
-             play(icol,k)     = p3d(i,k,1) / 100.
-             pdel(icol,k)     = plev(icol,k) - plev(icol,k+1)
-             tlay(icol,k)     = t3d(i,k,1)
-             h2ovmr(icol,k)   = amax1(qv3d(i,k,1),1.e-12) * amdw
-             co2vmr(icol,k)   = co2
-             o2vmr(icol,k)    = o2
-             ch4vmr(icol,k)   = ch4
-             n2ovmr(icol,k)   = n2o
-          enddo
-          plev(icol,kte+2)   = 1.0e-5
-          tlev(icol,kte+2)   = tlev(icol,kte+1) + 0.0
-          play(icol,kte+1)   = 0.5 * plev(icol,kte+1)
-          tlay(icol,kte+1)   = tlev(icol,kte+1) + 0.0
-          h2ovmr(icol,kte+1) = h2ovmr(icol,kte) 
-          co2vmr(icol,kte+1) = co2vmr(icol,kte) 
-          o2vmr(icol,kte+1)  = o2vmr(icol,kte) 
-          ch4vmr(icol,kte+1) = ch4vmr(icol,kte) 
-          n2ovmr(icol,kte+1) = n2ovmr(icol,kte) 
-          
-          !--- compute height of each layer mid-point from layer thickness needed for icl=4 (exponential) and
-          !    icld=5 (exponential-random) overlap. fill in height array above model top using dz1d from top
-          !    layer:
-          dzsum = 0.
-          do k = kts, kte
-             hlay(icol,k) = dzsum + 0.5*dz8w(i,k,1)
-             dzsum = dzsum + dz8w(i,k,1)
-          enddo
-          hlay(icol,kte+1) = dzsum + 0.5*dz8w(i,kte,1)
+            plev(icol,1) = p8w(i,1,1) / 100.
+            tlev(icol,1) = tw1d(1)
+            tsfc(icol)   = tsk(i,j)
+            do k = kts, kte
+               plev(icol,k+1)   = p3d(i,k+1,1) / 100.
+               tlev(icol,k+1)   = t3d(i,k+1,1)
+               play(icol,k)     = p3d(i,k,1) / 100.
+               pdel(icol,k)     = plev(icol,k) - plev(icol,k+1)
+               tlay(icol,k)     = t3d(i,k,1)
+               h2ovmr(icol,k)   = amax1(qv3d(i,k,1),1.e-12) * amdw
+               co2vmr(icol,k)   = co2
+               o2vmr(icol,k)    = o2
+               ch4vmr(icol,k)   = ch4
+               n2ovmr(icol,k)   = n2o
+            enddo
+            plev(icol,kte+2)   = 1.0e-5
+            tlev(icol,kte+2)   = tlev(icol,kte+1) + 0.0
+            play(icol,kte+1)   = 0.5 * plev(icol,kte+1)
+            tlay(icol,kte+1)   = tlev(icol,kte+1) + 0.0
+            h2ovmr(icol,kte+1) = h2ovmr(icol,kte) 
+            co2vmr(icol,kte+1) = co2vmr(icol,kte) 
+            o2vmr(icol,kte+1)  = o2vmr(icol,kte) 
+            ch4vmr(icol,kte+1) = ch4vmr(icol,kte) 
+            n2ovmr(icol,kte+1) = n2ovmr(icol,kte) 
+            
+            !--- compute height of each layer mid-point from layer thickness needed for icl=4 (exponential) and
+            !    icld=5 (exponential-random) overlap. fill in height array above model top using dz1d from top
+            !    layer:
+            dzsum = 0.
+            do k = kts, kte
+               hlay(icol,k) = dzsum + 0.5*dz8w(i,k,1)
+               dzsum = dzsum + dz8w(i,k,1)
+            enddo
+            hlay(icol,kte+1) = dzsum + 0.5*dz8w(i,kte,1)
 
-          !--- initialize the ozone volume mixing ratio:
-          call inirad(o3mmr,plev,kts,kte)
-          if(o3input .eq. 2) then
-             do k = 1, noznlevels
-                o3clim1d(k) = o3clim(i,k,j)
-             enddo
-             call vinterp_ozn(1,ncol,ncol,kte+1,play,pin,noznlevels,o3clim1d,o3mmr)
-             do k = kts,kte+1
-                o3vmr(icol,k) = o3mmr(k)
-             enddo
-          else
-             do k = kts,kte+1
-                o3vmr(icol,k) = o3mmr(k)*amdo
-             enddo
-          endif
+            !--- initialize the ozone volume mixing ratio:
+            call inirad(o3mmr,plev(icol),kts,kte)
+            if(o3input .eq. 2) then
+               do k = 1, noznlevels
+                  o3clim1d(k) = o3clim(i,k,j)
+               enddo
+               call vinterp_ozn(1,ncol,ncol,kte+1,play(icol),pin,noznlevels,o3clim1d,o3mmr)
+               do k = kts,kte+1
+                  o3vmr(icol,k) = o3mmr(k)
+               enddo
+            else
+               do k = kts,kte+1
+                  o3vmr(icol,k) = o3mmr(k)*amdo
+               enddo
+            endif
 
-          !--- initialize the surface albedo:
-          asdir(icol) = albedo(i,1)
-          asdif(icol) = albedo(i,1)
-          aldir(icol) = albedo(i,1)
-          aldif(icol) = albedo(i,1)
+            !--- initialize the surface albedo:
+            asdir(icol) = albedo(i,1)
+            asdif(icol) = albedo(i,1)
+            aldir(icol) = albedo(i,1)
+            aldif(icol) = albedo(i,1)
 
-          !--- set solar constant:
-          scon = solcon
-          !--- set cosine of solar zenith angle:
-          coszen(icol) = coszr(i,1) 
+            !--- set solar constant:
+            scon = solcon
+            !--- set cosine of solar zenith angle:
+            coszen(icol) = coszr(i,1) 
 
          enddo
           !--- in MPAS, the solar constant is already provided with eccentricity adjustment, so do not do
