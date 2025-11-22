@@ -10505,7 +10505,7 @@ allocate(clwpth(ncol,kts:kte+1),ciwpth(ncol,kts:kte+1),cswpth(ncol,kts:kte+1), &
                do k = 1, noznlevels
                   o3clim1d(k) = o3clim(i,k,j)
                enddo
-               call vinterp_ozn(1,ncol,ncol,kte+1,play(icol),pin,noznlevels,o3clim1d,o3mmr)
+               call vinterp_ozn(1,ncol,ncol,kte+1,play,pin,noznlevels,o3clim1d,o3mmr)
                do k = kts,kte+1
                   o3vmr(icol,k) = o3mmr(k)
                enddo
