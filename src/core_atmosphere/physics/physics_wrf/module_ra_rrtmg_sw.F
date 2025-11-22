@@ -10201,7 +10201,7 @@ CONTAINS
 
 
  integer, dimension(its:ite) :: nday_index
- integer :: ncols_day
+ integer :: ncols_day, icol
 
 
 !--- set trace gas volume mixing ratios, 2005 values, IPCC (2007):
@@ -10257,10 +10257,9 @@ CONTAINS
 ncols_day = 0
 nlay = (kte-kts+1) + 1
 !--- latitude loop:
- j_loop: do j = jts,jte
-
+ do j = jts,jte
 !--- longitude loop:
-    i_loop: do i = its,ite
+    do i = its,ite
 
        !--- calculate the cosine of the solar zenith angle at the current time step to determine if the sun is
        !    above or below the horizon (xt24 is the fractional part of simulation days plus half of radt in 
