@@ -10268,7 +10268,6 @@ CONTAINS
  calc_clean_atm_diag = 0
 
 ncols_day = 0
-nlay = (kte-kts+1) + 1
 !--- latitude loop:
  do j = jts,jte
 !--- longitude loop:
@@ -10310,14 +10309,14 @@ nlay = (kte-kts+1) + 1
    allocate(aldir(ncol))
    allocate(aldif(ncol))
    allocate(coszen(ncol))
-   allocate(pdel(ncol,nlay))
-   allocate(cicewp(ncol,nlay))
-   allocate(cliqwp(ncol,nlay))
-   allocate(csnowp(ncol,nlay))
-   allocate(reliq(ncol,nlay))
-   allocate(reice(ncol,nlay))
-   allocate(resnow(ncol,nlay))
-   allocate(ecaer(ncol,nlay,naerec))
+   allocate(pdel(ncol,kte-kts+1))
+   allocate(cicewp(ncol,kte-kts+1))
+   allocate(cliqwp(ncol,kte-kts+1))
+   allocate(csnowp(ncol,kte-kts+1))
+   allocate(reliq(ncol,kte-kts+1))
+   allocate(reice(ncol,kte-kts+1))
+   allocate(resnow(ncol,kte-kts+1))
+   allocate(ecaer(ncol,kts:kte+1,naerec))
 
  allocate(play(ncol,kts:kte+1),hlay(ncol,kts:kte+1),tlay(ncol,kts:kte+1), &
           h2ovmr(ncol,kts:kte+1),o3vmr(ncol,kts:kte+1),co2vmr(ncol,kts:kte+1), &
