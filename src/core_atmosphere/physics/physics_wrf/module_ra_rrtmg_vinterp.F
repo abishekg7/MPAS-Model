@@ -52,7 +52,7 @@
 
 !  real(kind=RKIND), intent(out) :: o3vmr(pcols,pver) ! ozone volume mixing ratio
 
-   real(kind=RKIND), intent(in) :: pmid_in(pcols,pver)   ! level pressures (mks)
+   real(kind=RKIND), intent(in) :: pmid_in(:,:)   ! level pressures (mks)
    real(kind=RKIND), intent(in) :: pin_in(levsiz)        ! ozone data level pressures (mks)
    real(kind=RKIND), intent(in) :: ozmix_in(pcols,levsiz)! ozone mixing ratio
 
