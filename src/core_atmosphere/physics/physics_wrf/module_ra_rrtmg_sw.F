@@ -10499,13 +10499,20 @@ allocate(clwpth(ncol,kts:kte+1),ciwpth(ncol,kts:kte+1),cswpth(ncol,kts:kte+1), &
             enddo
             hlay(icol,kte+1) = dzsum + 0.5*dz8w(i,kte,1)
 
+            do k = kts, kte+2
+               pw1d(k) = plev(icol,k)
+            enddo
+            do k = kts, kte+1
+               p1d(k) = play(icol,k)
+            enddo
+
             !--- initialize the ozone volume mixing ratio:
-            call inirad(o3mmr,plev(icol,kts:kte+2),kts,kte)
+            call inirad(o3mmr,pw1d,kts,kte)
             if(o3input .eq. 2) then
                do k = 1, noznlevels
                   o3clim1d(k) = o3clim(i,k,j)
                enddo
-               call vinterp_ozn(1,1,1,kte+1,play(icol,1:kte+1),pin,noznlevels,o3clim1d,o3mmr)
+               call vinterp_ozn(1,1,1,kte+1,p1d,pin,noznlevels,o3clim1d,o3mmr)
                do k = kts,kte+1
                   o3vmr(icol,k) = o3mmr(k)
                enddo

@@ -12313,7 +12313,7 @@ CONTAINS
 
    REAL, DIMENSION( kts:kte+1 ),INTENT(INOUT)    ::    O3PROF
 
-   REAL, DIMENSION( : ),INTENT(IN   )    ::      Plev
+   REAL, DIMENSION( kts:kte+2 ),INTENT(IN   )    ::      Plev
 
 ! LOCAL VAR
   
@@ -12340,7 +12340,7 @@ CONTAINS
 !
    REAL, DIMENSION( kts:kte+1 ),INTENT(INOUT)    ::    O3PROF
 
-   REAL, DIMENSION( : ),INTENT(IN   )    ::      Plev
+   REAL, DIMENSION( kts:kte+2 ),INTENT(IN   )    ::      Plev
 
 ! LOCAL VAR
    INTEGER :: K, JJ
