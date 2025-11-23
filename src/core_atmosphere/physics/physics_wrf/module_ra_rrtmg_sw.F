@@ -10468,8 +10468,8 @@ allocate(clwpth(ncol,kts:kte+1),ciwpth(ncol,kts:kte+1),cswpth(ncol,kts:kte+1), &
             tlev(icol,1) = tw1d(1)
             tsfc(icol)   = tsk(i,j)
             do k = kts, kte
-               plev(icol,k+1)   = p3d(i,k+1,1) / 100.
-               tlev(icol,k+1)   = t3d(i,k+1,1)
+               plev(icol,k+1)   = p8w(i,k+1,1) / 100
+               tlev(icol,k+1)   = t8w(i,k+1,1)
                play(icol,k)     = p3d(i,k,1) / 100.
                pdel(icol,k)     = plev(icol,k) - plev(icol,k+1)
                tlay(icol,k)     = t3d(i,k,1)
