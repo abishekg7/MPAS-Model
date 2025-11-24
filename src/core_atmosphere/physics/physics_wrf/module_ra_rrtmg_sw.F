@@ -10171,9 +10171,9 @@ CONTAINS
  real,allocatable, dimension(:):: asdir,asdif,aldir,aldif,coszen
  real,allocatable, dimension(:,:):: pdel,cicewp,cliqwp,csnowp,reliq,reice,resnow
  real,dimension(kts:kte):: &
-    tten1d,cldfra1d,dz1d,p1d,t1d,qv1d,qc1d,qr1d,qi1d,qs1d,qg1d,o31d
- real,dimension(kts:kte+1):: pw1d,tw1d
- real,dimension(kts:kte+1):: o3mmr
+    tten1d,cldfra1d,dz1d,t1d,qv1d,qc1d,qr1d,qi1d,qs1d,qg1d,o31d
+ real,dimension(kts:kte+2):: pw1d,tw1d
+ real,dimension(kts:kte+1):: p1d,o3mmr
 
 !--- additional local variables and arrays needed to include additional layers between the model top
 !    and the top of the atmosphere:
