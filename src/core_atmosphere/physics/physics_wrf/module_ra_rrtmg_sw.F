@@ -2952,10 +2952,10 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
 ! layer pressure.  Store them in JP and JP1.  Store in FP the
 ! fraction of the difference (in ln(pressure)) between these
 ! two values that the layer pressure lies.
-         write(errmess,'(A,i5,f8.2,f8.2)' )         &
-               ' in setcoef_sw: lay, pavel(lay), tavel(lay), ', &
-               lay,pavel(lay), tavel(lay)
-         call physics_message(errmess)
+         ! write(errmess,'(A,i5,f8.2,f8.2)' )         &
+         !       ' in setcoef_sw: lay, pavel(lay), tavel(lay), ', &
+         !       lay,pavel(lay), tavel(lay)
+         ! call physics_message(errmess)
          plog = log(pavel(lay))
          jp(lay) = int(36._rb - 5*(plog+0.04_rb))
          if (jp(lay) .lt. 1) then
