@@ -9353,7 +9353,7 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
 ! Prepare atmosphere profile from GCM for use in RRTMG, and define
 ! other input parameters
 
-         call inatm_sw (iplon, nlay, icld, iaer, &
+         call inatm_sw (ncol, nlay, icld, iaer, &
               play, plev, tlay, tlev, tsfc, h2ovmr, &
               o3vmr, co2vmr, ch4vmr, n2ovmr, o2vmr, &
               adjes, dyofyr, scon, inflgsw, iceflgsw, liqflgsw, &
