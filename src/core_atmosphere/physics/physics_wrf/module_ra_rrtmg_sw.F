@@ -9506,10 +9506,10 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
       do ib = 1 ,nbndsw
          do i = 1 ,nlayers
             do iplon = 1, ncol
-               ztaua(iplon,i,ib) = taua(i,ib)
+               ztaua(iplon,i,ib) = taua(iplon,i,ib)
                ztauacln(iplon,i,ib) = 0.0
-               zasya(iplon,i,ib) = asma(i,ib)
-               zomga(iplon,i,ib) = ssaa(i,ib)
+               zasya(iplon,i,ib) = asma(iplon,i,ib)
+               zomga(iplon,i,ib) = ssaa(iplon,i,ib)
             enddo
          enddo
       enddo
