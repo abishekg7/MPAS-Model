@@ -9364,7 +9364,7 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
 !  effective radius must be passed in cldprop.  Cloud fraction and cloud
 !  optical properties are transferred to rrtmg_sw arrays in cldprop.  
 
-         call cldprmc_sw(nlayers, inflag, iceflag, liqflag, cldfmc, &
+         call cldprmc_sw(ncol, nlayers, inflag, iceflag, liqflag, cldfmc, &
                          ciwpmc, clwpmc, cswpmc, reicmc, relqmc, resnmc, &
                          taormc, taucmc, ssacmc, asmcmc, fsfcmc)
          icpr = 1
