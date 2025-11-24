@@ -2745,10 +2745,10 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
 !              zem2 = exp(-ze2 )
 !
 ! Revised original, to reduce exponentials
-                  zep1 = exp( ze1 )
-                  zem1 = 1._rb / zep1
-                  zep2 = exp( ze2 )
-                  zem2 = 1._rb / zep2
+                  ! zep1 = exp( ze1 )
+                  ! zem1 = 1._rb / zep1
+                  ! zep2 = exp( ze2 )
+                  ! zem2 = 1._rb / zep2
 !
 ! Use exponential lookup table for transmittance, or expansion of 
 ! exponential for low tau
