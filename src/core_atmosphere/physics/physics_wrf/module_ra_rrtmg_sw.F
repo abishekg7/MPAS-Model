@@ -2456,9 +2456,9 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
                   if(scatsno.eq.0.) scatsno = cldmin
 
                   if (iceflag .lt. 5) then
-                      ssacmc(iplon,ig,lay) = (scatliq + scatice) / ztaucmc(iplon,ig,lay)
+                      zssacmc(iplon,ig,lay) = (scatliq + scatice) / ztaucmc(iplon,ig,lay)
                   else
-                      ssacmc(iplon,ig,lay) = (scatliq + scatice + scatsno) / ztaucmc(iplon,ig,lay)
+                      zssacmc(iplon,ig,lay) = (scatliq + scatice + scatsno) / ztaucmc(iplon,ig,lay)
                   endif
 
                   if (iceflag .eq. 3 .or. iceflag.eq.4) then
