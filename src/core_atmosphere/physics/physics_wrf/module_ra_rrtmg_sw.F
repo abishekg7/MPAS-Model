@@ -2089,37 +2089,37 @@
       contains
 
 ! ----------------------------------------------------------------------------
-      subroutine cldprmc_sw(nlayers, inflag, iceflag, liqflag, cldfmc, &
-                            ciwpmc, clwpmc, cswpmc, reicmc, relqmc, resnmc, &
-                            taormc, taucmc, ssacmc, asmcmc, fsfcmc)
+subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
+                            ciwpmc, clwpmc,cswpmc, reicmc, relqmc,resnmc, &
+                            ztaormc, ztaucmc, zssacmc, zasmcmc, fsfcmc)
 ! ----------------------------------------------------------------------------
 
-! Purpose: Compute the cloud optical properties for each cloudy layer
-! and g-point interval for use by the McICA method.  
-! Note: Only inflag = 0 and inflag=2/liqflag=1/iceflag=2,3 are available;
-! (Hu & Stamnes, Key, and Fu) are implemented. 
+   ! Purpose: Compute the cloud optical properties for each cloudy layer
+   ! and g-point interval for use by the McICA method.  
+   ! Note: Only inflag = 0 and inflag=2/liqflag=1/iceflag=2,3 are available;
+   ! (Hu & Stamnes, Key, and Fu) are implemented. 
 
-! ------- Input -------
+   ! ------- Input -------
 
-      integer(kind=im), intent(in) :: nlayers         ! total number of layers
-      integer(kind=im), intent(in) :: inflag          ! see definitions
-      integer(kind=im), intent(in) :: iceflag         ! see definitions
-      integer(kind=im), intent(in) :: liqflag         ! see definitions
+   integer(kind=im), intent(in) :: nlayers         ! total number of layers
+   integer(kind=im), intent(in) :: ncol            ! total number of layers
+   integer(kind=im), intent(in) :: inflag          ! see definitions
+   integer(kind=im), intent(in) :: iceflag         ! see definitions
+   integer(kind=im), intent(in) :: liqflag         ! see definitions
 
-      real(kind=rb), intent(in) :: cldfmc(:,:)        ! cloud fraction [mcica]
-                                                      !    Dimensions: (ngptsw,nlayers)
-      real(kind=rb), intent(in) :: ciwpmc(:,:)        ! cloud ice water path [mcica]
-                                                      !    Dimensions: (ngptsw,nlayers)
-      real(kind=rb), intent(in) :: clwpmc(:,:)        ! cloud liquid water path [mcica]
-                                                      !    Dimensions: (ngptsw,nlayers)
-      real(kind=rb), intent(in) :: cswpmc(:,:)        ! cloud snow water path [mcica]
-                                                      !    Dimensions: (ngptsw,nlayers)
-      real(kind=rb), intent(in) :: resnmc(:)          ! cloud snow particle effective radius (microns)
-                                                      !    Dimensions: (nlayers)
-      real(kind=rb), intent(in) :: relqmc(:)          ! cloud liquid particle effective radius (microns)
-                                                      !    Dimensions: (nlayers)
-      real(kind=rb), intent(in) :: reicmc(:)          ! cloud ice particle effective radius (microns)
-                                                      !    Dimensions: (nlayers)
+   real(kind=rb), intent(in) :: zcldfmc(ncol,nlayers,ngptsw) ! cloud fraction [mcica]
+                                                     !    Dimensions: (ncol,nlayers,ngptsw)
+   real(kind=rb), intent(in) :: ciwpmc(ncol,ngptsw,nlayers) ! cloud ice water path [mcica]
+                                                     !    Dimensions: (ncol,ngptsw,nlayers)
+   real(kind=rb), intent(in) :: clwpmc(ncol,ngptsw,nlayers) ! cloud liquid water path [mcica]
+   real(kind=rb), intent(in) :: cswpmc(ncol,ngptsw,nlayers) ! cloud snow water path [mcica]
+                                                     !    Dimensions: (ncol,ngptsw,nlayers)
+   real(kind=rb), intent(in) :: relqmc(ncol,nlayers)  ! cloud liquid particle effective radius (microns)
+                                                     !    Dimensions: (ncol,nlayers)
+   real(kind=rb), intent(in) :: resnmc(ncol,nlayers) ! cloud snow particle effective radius (microns)
+                                                     !    Dimensions: (ncol,nlayers)
+   real(kind=rb), intent(in) :: reicmc(ncol,nlayers)  ! cloud ice particle effective radius (microns)
+                                                      !    Dimensions: (ncol, nlayers)
                                                       ! specific definition of reicmc depends on setting of iceflag:
                                                       ! iceflag = 1: ice effective radius, r_ec, (Ebert and Curry, 1992),
                                                       !              r_ec range is limited to 13.0 to 130.0 microns
@@ -2128,35 +2128,33 @@
                                                       ! iceflag = 3: generalized effective size, dge, (Fu, 1996),
                                                       !              dge range is limited to 5.0 to 140.0 microns
                                                       !              [dge = 1.0315 * r_ec]
-      real(kind=rb), intent(in) :: fsfcmc(:,:)        ! cloud forward scattering fraction
-                                                      !    Dimensions: (ngptsw,nlayers)
+   real(kind=rb), intent(in) :: fsfcmc(ncol,ngptsw,nlayers) ! cloud forward scattering fraction 
+                                                     !    Dimensions: (ncol,ngptsw,nlayers)
 
-! ------- Output -------
+   ! ------- Output -------
 
-      real(kind=rb), intent(inout) :: taucmc(:,:)     ! cloud optical depth (delta scaled)
-                                                      !    Dimensions: (ngptsw,nlayers)
-      real(kind=rb), intent(inout) :: ssacmc(:,:)     ! single scattering albedo (delta scaled)
-                                                      !    Dimensions: (ngptsw,nlayers)
-      real(kind=rb), intent(inout) :: asmcmc(:,:)     ! asymmetry parameter (delta scaled)
-                                                      !    Dimensions: (ngptsw,nlayers)
-      real(kind=rb), intent(out) :: taormc(:,:)       ! cloud optical depth (non-delta scaled)
-                                                      !    Dimensions: (ngptsw,nlayers)
-
-! ------- Local -------
+   real(kind=rb), intent(inout) :: ztaucmc(ncol,nlayers,ngptsw) ! cloud optical depth (delta scaled)
+                                                     !    Dimensions: (ncol,nlayers,ngptsw)
+   real(kind=rb), intent(inout) :: zssacmc(ncol,nlayers,ngptsw) ! single scattering albedo (delta scaled)
+                                                     !    Dimensions: (ncol,nlayers,ngptsw)
+   real(kind=rb), intent(inout) :: zasmcmc(ncol,nlayers,ngptsw) ! asymmetry parameter (delta scaled)
+                                                     !    Dimensions: (ncol,nlayers,ngptsw)
+   real(kind=rb), intent(out) :: ztaormc(ncol,nlayers,ngptsw)   ! cloud optical depth (non-delta scaled)
+                                                     !    Dimensions: (ncol,nlayers,ngptsw)
 
 !      integer(kind=im) :: ncbands
       integer(kind=im) :: ib, lay, istr, index, icx, ig
 
       real(kind=rb), parameter :: eps = 1.e-06_rb     ! epsilon
       real(kind=rb), parameter :: cldmin = 1.e-20_rb  ! minimum value for cloud quantities
-      real(kind=rb) :: cwp                            ! total cloud water path
+      real(kind=rb) :: cwp(ncol)                            ! total cloud water path
       real(kind=rb) :: radliq                         ! cloud liquid droplet radius (microns)
       real(kind=rb) :: radice                         ! cloud ice effective size (microns)
       real(kind=rb) :: radsno                         ! cloud snow effective size (microns)
       real(kind=rb) :: factor
       real(kind=rb) :: fint
 
-      real(kind=rb) :: taucldorig_a, taucloud_a, ssacloud_a, ffp, ffp1, ffpssa
+      real(kind=rb), dimension(ncol) :: taucldorig_a, taucloud_a, ssacloud_a, ffp, ffp1, ffpssa
       real(kind=rb) :: tauiceorig, scatice, ssaice, tauice, tauliqorig, scatliq, ssaliq, tauliq
       real(kind=rb) :: tausnoorig, scatsno, ssasno, tausno
 
@@ -2170,55 +2168,45 @@
 
       CHARACTER*80 errmess
 
-! Initialize
 
-!jm not thread safe      hvrclc = '$Revision: 1.3 $'
+ ! Main layer loop
+   do lay = 1, nlayers
 
-! Some of these initializations are done elsewhere
-      do lay = 1, nlayers
-         do ig = 1, ngptsw
-            taormc(ig,lay) = taucmc(ig,lay)
-!            taucmc(ig,lay) = 0.0_rb
-!            ssacmc(ig,lay) = 1.0_rb
-!            asmcmc(ig,lay) = 0.0_rb
-         enddo
-      enddo
+      ! Main g-point interval loop
+      do ig = 1, ngptsw 
 
-! Main layer loop
-      do lay = 1, nlayers
+         do iplon=1, ncol
 
-! Main g-point interval loop
-         do ig = 1, ngptsw 
-            cwp = ciwpmc(ig,lay) + clwpmc(ig,lay) + cswpmc(ig,lay)
+            ztaormc(iplon,lay,ig) = ztaucmc(iplon,lay,ig)
+            cwp(iplon) = ciwpmc(iplon,ig,lay) + clwpmc(iplon,ig,lay) + cswpmc(iplon,ig,lay)
+            if (zcldfmc(iplon,lay,ig) .ge. cldmin .and. &
+               (cwp(iplon) .ge. cldmin .or. ztaucmc(iplon,lay,ig) .ge. cldmin)) then
 
-            if (cldfmc(ig,lay) .ge. cldmin .and. &
-               (cwp .ge. cldmin .or. taucmc(ig,lay) .ge. cldmin)) then
-
-! (inflag=0): Cloud optical properties input directly
+               ! (inflag=0): Cloud optical properties input directly
                if (inflag .eq. 0) then
-! Cloud optical properties already defined in taucmc, ssacmc, asmcmc are unscaled;
-! Apply delta-M scaling here (using Henyey-Greenstein approximation)
-                  taucldorig_a = taucmc(ig,lay)
-                  ffp = fsfcmc(ig,lay)
-                  ffp1 = 1.0_rb - ffp
-                  ffpssa = 1.0_rb - ffp * ssacmc(ig,lay)
-                  ssacloud_a = ffp1 * ssacmc(ig,lay) / ffpssa
-                  taucloud_a = ffpssa * taucldorig_a
+                  ! Cloud optical properties already defined in ztaucmc, zssacmc, zasmcmc are unscaled;
+                  ! Apply delta-M scaling here (using Henyey-Greenstein approximation)
+                  taucldorig_a(iplon) = ztaucmc(iplon,lay,ig)
+                  ffp(iplon) = fsfcmc(iplon,ig,lay)
+                  ffp1(iplon) = 1.0_r8 - ffp(iplon)
+                  ffpssa(iplon) = 1.0_r8 - ffp(iplon) * zssacmc(iplon,lay,ig)
+                  ssacloud_a(iplon) = ffp1(iplon) * zssacmc(iplon,lay,ig) / ffpssa(iplon)
+                  taucloud_a(iplon) = ffpssa(iplon) * taucldorig_a(iplon)
 
-                  taormc(ig,lay) = taucldorig_a
-                  ssacmc(ig,lay) = ssacloud_a
-                  taucmc(ig,lay) = taucloud_a
-                  asmcmc(ig,lay) = (asmcmc(ig,lay) - ffp) / (ffp1)
-
+                  ztaormc(iplon,lay,ig) = taucldorig_a(iplon)
+                  zssacmc(iplon,lay,ig) = ssacloud_a(iplon)
+                  ztaucmc(iplon,lay,ig) = taucloud_a(iplon)
+                  zasmcmc(iplon,lay,ig) = (zasmcmc(iplon,lay,ig) - ffp(iplon)) / (ffp1(iplon))
+        
                elseif (inflag .eq. 1) then 
                   stop 'INFLAG = 1 OPTION NOT AVAILABLE WITH MCICA'
 
 ! (inflag=2): Separate treatement of ice clouds and water clouds.
                elseif (inflag .ge. 2) then
-                  radice = reicmc(lay)
+                  radice = reicmc(iplon,lay)
 
 ! Calculation of absorption coefficients due to ice clouds.
-                  if ((ciwpmc(ig,lay)+cswpmc(ig,lay)) .eq. 0.0_rb) then
+                  if ((ciwpmc(iplon,ig,lay)+cswpmc(iplon,ig,lay)) .eq. 0.0_rb) then
                      extcoice(ig) = 0.0_rb
                      ssacoice(ig) = 0.0_rb
                      gice(ig)     = 0.0_rb
@@ -2287,7 +2275,7 @@
                      if (radice .lt. 5.0_rb .or. radice .gt. 140.0_rb) then
                          write(errmess,'(A,i5,i5,f8.2,f8.2)' )         &
                'ERROR: ICE GENERALIZED EFFECTIVE SIZE OUT OF BOUNDS'   &
-               ,ig, lay, ciwpmc(ig,lay), radice
+               ,ig, lay, ciwpmc(iplon,ig,lay), radice
                          FATAL_ERROR(errmess)
                      end if
                      factor = (radice - 2._rb)/3._rb
@@ -2331,12 +2319,12 @@
 !!!! an improvement.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-                  if (cswpmc(ig,lay).gt.0.0_rb .and. iceflag .eq. 5) then
-                     radsno = resnmc(lay)
+                  if (cswpmc(iplon,ig,lay).gt.0.0_rb .and. iceflag .eq. 5) then
+                     radsno = resnmc(iplon,lay)
                      if (radsno .lt. 5.0_rb .or. radsno .gt. 140.0_rb) then
                          write(errmess,'(A,i5,i5,f8.2,f8.2)' )         &
                'ERROR: SNOW GENERALIZED EFFECTIVE SIZE OUT OF BOUNDS'   &
-               ,ig, lay, cswpmc(ig,lay), radsno
+               ,ig, lay, cswpmc(iplon,ig,lay), radsno
                          FATAL_ERROR(errmess)
                      end if
                      factor = (radsno - 2._rb)/3._rb
@@ -2393,14 +2381,14 @@
 
 
 ! Calculation of absorption coefficients due to water clouds.
-                  if (clwpmc(ig,lay) .eq. 0.0_rb) then
+                  if (clwpmc(iplon,ig,lay) .eq. 0.0_rb) then
                      extcoliq(ig) = 0.0_rb
                      ssacoliq(ig) = 0.0_rb
                      gliq(ig) = 0.0_rb
                      forwliq(ig) = 0.0_rb
 
                   elseif (liqflag .eq. 1) then
-                     radliq = relqmc(lay)
+                     radliq = relqmc(iplon,lay)
                      if (radliq .lt. 1.5_rb .or. radliq .gt. 60._rb) stop &
                         'liquid effective radius out of bounds'
                      index = int(radliq - 1.5_rb)
@@ -2427,8 +2415,8 @@
    
 
                   if (iceflag .lt. 5) then
-                      tauliqorig = clwpmc(ig,lay) * extcoliq(ig)
-                      tauiceorig = ciwpmc(ig,lay) * extcoice(ig)
+                      tauliqorig = clwpmc(iplon,ig,lay) * extcoliq(ig)
+                      tauiceorig = ciwpmc(iplon,ig,lay) * extcoice(ig)
                       taormc(ig,lay) = tauliqorig + tauiceorig
   
                       ssaliq = ssacoliq(ig) * (1._rb - forwliq(ig)) / &
@@ -2440,12 +2428,12 @@
                       scatliq = ssaliq * tauliq
                       scatice = ssaice * tauice
                       scatsno = 0.0_rb 
-                      taucmc(ig,lay) = tauliq + tauice
+                      ztaucmc(iplon,ig,lay) = tauliq + tauice
                   else
-                      tauliqorig = clwpmc(ig,lay) * extcoliq(ig)
-                      tauiceorig = ciwpmc(ig,lay) * extcoice(ig)
-                      tausnoorig = cswpmc(ig,lay) * extcosno(ig)
-                      taormc(ig,lay) = tauliqorig + tauiceorig + tausnoorig
+                      tauliqorig = clwpmc(iplon,ig,lay) * extcoliq(ig)
+                      tauiceorig = ciwpmc(iplon,ig,lay) * extcoice(ig)
+                      tausnoorig = cswpmc(iplon,ig,lay) * extcosno(ig)
+                      ztaormc(iplon,ig,lay) = tauliqorig + tauiceorig + tausnoorig
 
                       ssaliq = ssacoliq(ig) * (1._rb - forwliq(ig)) / &
                                (1._rb - forwliq(ig) * ssacoliq(ig))
@@ -2459,18 +2447,18 @@
                       scatliq = ssaliq * tauliq
                       scatice = ssaice * tauice
                       scatsno = ssasno * tausno
-                      taucmc(ig,lay) = tauliq + tauice + tausno
+                      ztaucmc(iplon,ig,lay) = tauliq + tauice + tausno
                   endif
 
 ! Ensure non-zero taucmc and scatice
-                  if(taucmc(ig,lay).eq.0.) taucmc(ig,lay) = cldmin
+                  if(ztaucmc(iplon,ig,lay).eq.0.) ztaucmc(iplon,ig,lay) = cldmin
                   if(scatice.eq.0.) scatice = cldmin
                   if(scatsno.eq.0.) scatsno = cldmin
 
                   if (iceflag .lt. 5) then
-                      ssacmc(ig,lay) = (scatliq + scatice) / taucmc(ig,lay)
+                      ssacmc(ig,lay) = (scatliq + scatice) / ztaucmc(iplon,ig,lay)
                   else
-                      ssacmc(ig,lay) = (scatliq + scatice + scatsno) / taucmc(ig,lay)
+                      ssacmc(ig,lay) = (scatliq + scatice + scatsno) / ztaucmc(iplon,ig,lay)
                   endif
 
                   if (iceflag .eq. 3 .or. iceflag.eq.4) then
@@ -2479,13 +2467,13 @@
 ! or hexagonal ice crystals.
 ! Set asymetry parameter to first moment (istr=1)
                      istr = 1
-                     asmcmc(ig,lay) = (1.0_rb/(scatliq+scatice))* &
+                     zasmcmc(iplon,ig,lay) = (1.0_rb/(scatliq+scatice))* &
                         (scatliq*(gliq(ig)**istr - forwliq(ig)) / &
                         (1.0_rb - forwliq(ig)) + scatice * ((gice(ig)-forwice(ig))/ &
                         (1.0_rb - forwice(ig)))**istr)
                   elseif (iceflag .eq. 5) then
                      istr = 1
-                     asmcmc(ig,lay) = (1.0_rb/(scatliq+scatice+scatsno))                               &
+                     zasmcmc(iplon,ig,lay) = (1.0_rb/(scatliq+scatice+scatsno))                               &
                                     *  (scatliq*(gliq(ig)**istr - forwliq(ig))/(1.0_rb - forwliq(ig))  &
                                     + scatice * ((gice(ig)-forwice(ig))/(1.0_rb - forwice(ig)))        &
                                     + scatsno * ((gsno(ig)-forwsno(ig))/(1.0_rb - forwsno(ig)))**istr)
@@ -2494,7 +2482,7 @@
 ! This code is the standard method for delta-m scaling. 
 ! Set asymetry parameter to first moment (istr=1)
                      istr = 1
-                     asmcmc(ig,lay) = (scatliq *  &
+                     zasmcmc(iplon,ig,lay) = (scatliq *  &
                         (gliq(ig)**istr - forwliq(ig)) / &
                         (1.0_rb - forwliq(ig)) + scatice * (gice(ig)**istr - forwice(ig)) / &
                         (1.0_rb - forwice(ig)))/(scatliq + scatice)
@@ -2503,12 +2491,13 @@
                endif
 
             endif
-
-! End g-point interval loop
          enddo
+! End g-point interval loop
+      enddo
 
 ! End layer loop
       enddo
+      
 
       end subroutine cldprmc_sw
 
@@ -9374,13 +9363,13 @@
 !  in cldprop.  Cloud fraction, water path, liquid droplet and ice particle
 !  effective radius must be passed in cldprop.  Cloud fraction and cloud
 !  optical properties are transferred to rrtmg_sw arrays in cldprop.  
-do iplon = 1, ncol
 
-         call cldprmc_sw(nlayers, inflag, iceflag, liqflag, cldfmc(iplon,:,:), &
-                         ciwpmc(iplon,:,:), clwpmc(iplon,:,:), cswpmc(iplon,:,:), reicmc(iplon,:), relqmc(iplon,:), resnmc(iplon,:), &
-                         taormc(iplon,:,:), taucmc(iplon,:,:), ssacmc(iplon,:,:), asmcmc(iplon,:,:), fsfcmc(iplon,:,:))
+         call cldprmc_sw(nlayers, inflag, iceflag, liqflag, cldfmc, &
+                         ciwpmc, clwpmc, cswpmc, reicmc, relqmc, resnmc, &
+                         taormc, taucmc, ssacmc, asmcmc, fsfcmc)
          icpr = 1
 
+         do iplon = 1, ncol
 
          ! This is the main longitude/column loop in RRTMG.
    ! Modify to loop over all columns (nlon) or over daylight columns
