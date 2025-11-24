@@ -8333,22 +8333,22 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
 
 ! ------- Output -------
                                                                  !   All Dimensions: (nlayers+1)
-      real(kind=rb), intent(out) :: pbbcd(:,:)
-      real(kind=rb), intent(out) :: pbbcu(:,:)
-      real(kind=rb), intent(out) :: pbbfd(:,:)
-      real(kind=rb), intent(out) :: pbbfu(:,:)
+      real(kind=rb), intent(out) :: pbbcd(ncol,nlayers+2)
+      real(kind=rb), intent(out) :: pbbcu(ncol,nlayers+2)
+      real(kind=rb), intent(out) :: pbbfd(ncol,nlayers+2)
+      real(kind=rb), intent(out) :: pbbfu(ncol,nlayers+2)
       real(kind=rb), intent(out) :: pbbfddir(ncol,nlayers+2)
       real(kind=rb), intent(out) :: pbbcddir(ncol,nlayers+2)
 
       real(kind=rb), intent(out) :: puvcd(ncol,nlayers+2)
       real(kind=rb), intent(out) :: puvfd(ncol,nlayers+2)
       real(kind=rb), intent(out) :: puvcddir(ncol,nlayers+2)
-      real(kind=rb), intent(out) :: puvfddir(:,:)
+      real(kind=rb), intent(out) :: puvfddir(ncol,nlayers+2)
 
       real(kind=rb), intent(out) :: pnicd(ncol,nlayers+2)
       real(kind=rb), intent(out) :: pnifd(ncol,nlayers+2)
       real(kind=rb), intent(out) :: pnicddir(ncol,nlayers+2)
-      real(kind=rb), intent(out) :: pnifddir(:,:)
+      real(kind=rb), intent(out) :: pnifddir(ncol,nlayers+2)
 
 ! Output - inactive                                              !   All Dimensions: (nlayers+1)
 !      real(kind=rb), intent(out) :: puvcu(:)
@@ -8755,22 +8755,29 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
                   pbbcu(iplon,ikl) = pbbcu(iplon,ikl) + zincflx(iplon,iw(iplon))*zcu(iplon,jk,iw(iplon))
                   pbbcd(iplon,ikl) = pbbcd(iplon,ikl) + zincflx(iplon,iw(iplon))*zcd(iplon,jk,iw(iplon))
                enddo
+            enddo
 
 ! Accumulate direct fluxes for UV/visible bands
                if (ibm >= 10 .and. ibm <= 13) then
+                  do jk=1,klev+1
+                  ikl=klev+2-jk
                   do iplon=1,ncol
                      puvcd(iplon,ikl) = puvcd(iplon,ikl) + zincflx(iplon,iw(iplon))*zcd(iplon,jk,iw(iplon))
                      puvfd(iplon,ikl) = puvfd(iplon,ikl) + zincflx(iplon,iw(iplon))*zfd(iplon,jk,iw(iplon))
                      puvfddir(iplon,ikl) = puvfddir(iplon,ikl) + zincflx(iplon,iw(iplon))*ztdbt_nodel(iplon,jk)
                      puvcddir(iplon,ikl) = puvcddir(iplon,ikl) + zincflx(iplon,iw(iplon))*ztdbtc_nodel(iplon,jk)
                   enddo
+               enddo
 ! Accumulate direct fluxes for near-IR bands
                else if (ibm == 14 .or. ibm <= 9) then  
+                  do jk=1,klev+1
+                  ikl=klev+2-jk
                   do iplon=1,ncol
                      pnicd(iplon,ikl) = pnicd(iplon,ikl) + zincflx(iplon,iw(iplon))*zcd(iplon,jk,iw(iplon))
                      pnifd(iplon,ikl) = pnifd(iplon,ikl) + zincflx(iplon,iw(iplon))*zfd(iplon,jk,iw(iplon))
                      pnicddir(iplon,ikl) = pnicddir(iplon,ikl) + zincflx(iplon,iw(iplon))*ztdbtc_nodel(iplon,jk)
                      pnifddir(iplon,ikl) = pnifddir(iplon,ikl) + zincflx(iplon,iw(iplon))*ztdbt_nodel(iplon,jk)
+                  enddo
                   enddo
                endif
 
@@ -8779,7 +8786,6 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
 
 ! End loop on jb, spectral band
          enddo                    
-      end do
 
       end subroutine spcvmc_sw
 
