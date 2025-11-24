@@ -9163,9 +9163,9 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
       real(kind=rb) :: albdir(ncol,nbndsw)         ! surface albedo, direct          ! zalbp
       real(kind=rb) :: albdif(ncol,nbndsw)         ! surface albedo, diffuse         ! zalbd
 
-      real(kind=rb) :: taua(nlay+1,nbndsw)    ! Aerosol optical depth
-      real(kind=rb) :: ssaa(nlay+1,nbndsw)    ! Aerosol single scattering albedo
-      real(kind=rb) :: asma(nlay+1,nbndsw)    ! Aerosol asymmetry parameter
+      real(kind=rb) :: taua(ncol,nlay+1,nbndsw)    ! Aerosol optical depth
+      real(kind=rb) :: ssaa(ncol,nlay+1,nbndsw)    ! Aerosol single scattering albedo
+      real(kind=rb) :: asma(ncol,nlay+1,nbndsw)    ! Aerosol asymmetry parameter
 
 ! Atmosphere - setcoef
       integer(kind=im) :: laytrop(ncol)             ! tropopause layer index
