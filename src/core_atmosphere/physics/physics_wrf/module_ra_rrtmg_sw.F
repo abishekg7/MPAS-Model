@@ -10592,7 +10592,7 @@ allocate(clwpth(ncol,kts:kte+1),ciwpth(ncol,kts:kte+1),cswpth(ncol,kts:kte+1), &
                   icefrac(icol)  = xice(i,j)
                enddo
 
-                call relcalc(ncols_day,ncols_day,nlay,tlay,landfrac,landm,icefrac,reliq,snowh)
+                call relcalc(ncols_day,ncols_day,pver,tlay,landfrac,landm,icefrac,reliq,snowh)
              endif
 
              if(has_reqi .ne. 0) then
@@ -10621,7 +10621,7 @@ allocate(clwpth(ncol,kts:kte+1),ciwpth(ncol,kts:kte+1),cswpth(ncol,kts:kte+1), &
                 !    Kristjansson and Mitchell. limit upper bound of reice for Fu ice parameterization and
                 !    convert effective radius to generalized effective size (*1.0315; Fu, 1996):
 
-                call reicalc(ncols_day,ncols_day,nlay,tlay,reice)
+                call reicalc(ncols_day,ncols_day,pver,tlay,reice)
 
                 if(iceflgsw .eq. 3) then
                    do k = kts, kte
