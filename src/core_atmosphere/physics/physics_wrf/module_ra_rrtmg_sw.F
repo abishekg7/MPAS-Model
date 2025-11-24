@@ -2143,7 +2143,7 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
                                                      !    Dimensions: (ncol,nlayers,ngptsw)
 
 !      integer(kind=im) :: ncbands
-      integer(kind=im) :: ib, lay, istr, index, icx, ig
+      integer(kind=im) :: ib, lay, istr, index, icx, ig, iplon
 
       real(kind=rb), parameter :: eps = 1.e-06_rb     ! epsilon
       real(kind=rb), parameter :: cldmin = 1.e-20_rb  ! minimum value for cloud quantities
@@ -2188,8 +2188,8 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
                   ! Apply delta-M scaling here (using Henyey-Greenstein approximation)
                   taucldorig_a(iplon) = ztaucmc(iplon,lay,ig)
                   ffp(iplon) = fsfcmc(iplon,ig,lay)
-                  ffp1(iplon) = 1.0_r8 - ffp(iplon)
-                  ffpssa(iplon) = 1.0_r8 - ffp(iplon) * zssacmc(iplon,lay,ig)
+                  ffp1(iplon) = 1.0_rb - ffp(iplon)
+                  ffpssa(iplon) = 1.0_rb - ffp(iplon) * zssacmc(iplon,lay,ig)
                   ssacloud_a(iplon) = ffp1(iplon) * zssacmc(iplon,lay,ig) / ffpssa(iplon)
                   taucloud_a(iplon) = ffpssa(iplon) * taucldorig_a(iplon)
 
@@ -2417,7 +2417,7 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
                   if (iceflag .lt. 5) then
                       tauliqorig = clwpmc(iplon,ig,lay) * extcoliq(ig)
                       tauiceorig = ciwpmc(iplon,ig,lay) * extcoice(ig)
-                      taormc(ig,lay) = tauliqorig + tauiceorig
+                      ztaormc(iplon,ig,lay) = tauliqorig + tauiceorig
   
                       ssaliq = ssacoliq(ig) * (1._rb - forwliq(ig)) / &
                                (1._rb - forwliq(ig) * ssacoliq(ig))
@@ -2456,9 +2456,9 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
                   if(scatsno.eq.0.) scatsno = cldmin
 
                   if (iceflag .lt. 5) then
-                      ssacmc(ig,lay) = (scatliq + scatice) / ztaucmc(iplon,ig,lay)
+                      ssacmc(iplon,ig,lay) = (scatliq + scatice) / ztaucmc(iplon,ig,lay)
                   else
-                      ssacmc(ig,lay) = (scatliq + scatice + scatsno) / ztaucmc(iplon,ig,lay)
+                      ssacmc(iplon,ig,lay) = (scatliq + scatice + scatsno) / ztaucmc(iplon,ig,lay)
                   endif
 
                   if (iceflag .eq. 3 .or. iceflag.eq.4) then
