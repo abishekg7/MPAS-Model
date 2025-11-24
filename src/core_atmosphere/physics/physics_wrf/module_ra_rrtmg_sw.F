@@ -1529,7 +1529,6 @@
       
 ! MJI - Latitude and day of year dependent decorrelation length
       if (idcor .eq. 1) then
-         do icol = 1, ncol
 ! Derive decorrelation length based on day of year and latitude (from NASA GMAO method)
 ! Result is in meters
          if (juldat .gt. 181) then
@@ -1540,13 +1539,13 @@
 ! Latitude in radians, decorrelation length in meters
 !         decorr_len(:) = ( am1 + am2 * exp(-(lat*180._rb/pi - am3)**2 / (am4*am4)) ) * 1.e3_rb
 ! Latitude in degrees, decorrelation length in meters
-         decorr_len(icol) = ( am1 + am2 * exp(-(lat(icol) - am3)**2 / (am4*am4)) ) * 1.e3_rb
+         do icol = 1, ncol
+            decorr_len(icol) = ( am1 + am2 * exp(-(lat(icol) - am3)**2 / (am4*am4)) ) * 1.e3_rb
          enddo
       else
 ! Spatially and temporally constant decorrelation length
          decorr_len(:) = Zo_default
       endif
-   
 
 !  Generate the stochastic subcolumns of cloud optical properties for the shortwave;
       call generate_stochastic_clouds_sw (ncol, nlay, nsubcsw, icld, irng, pmid, cldfrac, clwp, ciwp, cswp, &
@@ -1559,8 +1558,7 @@
 
 
 !-------------------------------------------------------------------------------------------------
-      subroutine \
-         generate_stochastic_clouds_sw(ncol, nlay, nsubcol, icld, irng, pmid, cld, clwp, ciwp, cswp, &
+      subroutine generate_stochastic_clouds_sw(ncol, nlay, nsubcol, icld, irng, pmid, cld, clwp, ciwp, cswp, &
                                tauc, ssac, asmc, fsfc, &
                                hgt, decorr_len, &
                                cld_stoch, clwp_stoch, ciwp_stoch, cswp_stoch,        &
@@ -2497,7 +2495,6 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
 
 ! End layer loop
       enddo
-      
 
       end subroutine cldprmc_sw
 
@@ -2679,7 +2676,7 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
 ! collimated beam
 
                   ze1 = min ( zto1 / prmuz(icol) , 500._rb)
-                  ze2 = exp( -ze1 )
+!               ze2 = exp( -ze1 )
 
 ! Use exponential lookup table for transmittance, or expansion of 
 ! exponential for low tau
@@ -8613,9 +8610,6 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
                
                do jk=1, klev
                do iplon=1,ncol
-
-
-
 ! Delta scaling - clear   
                   zf = zgcc(iplon,jk) * zgcc(iplon,jk)
                   zwf = zomcc(iplon,jk) * zf
@@ -8662,7 +8656,6 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
                endif 
 
 ! End of layer loop
-            
 
 ! Clear sky reflectivities
             call reftra_sw (klev,ncol, &
