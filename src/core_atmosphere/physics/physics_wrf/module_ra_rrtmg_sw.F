@@ -2824,6 +2824,7 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
       use parrrsw, only : mxmol
       use rrsw_ref, only : pref, preflog, tref
       use rrsw_vsn, only : hvrset, hnamset
+      use mpas_atmphys_utilities,only: physics_message
 
       implicit none
 
@@ -2954,6 +2955,7 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
          write(errmess,'(A,i5,f8.2,f8.2)' )         &
                ' in setcoef_sw: lay, pavel(lay), tavel(lay), ', &
                lay,pavel(lay), tavel(lay)
+         call physics_message(errmess)
          plog = log(pavel(lay))
          jp(lay) = int(36._rb - 5*(plog+0.04_rb))
          if (jp(lay) .lt. 1) then
