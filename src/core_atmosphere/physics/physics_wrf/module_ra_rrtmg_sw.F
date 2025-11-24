@@ -9159,7 +9159,7 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
 !      real(kind=rb) :: earth_sun             ! function for Earth/Sun distance factor
       real(kind=rb), dimension(ncol) :: cossza                 ! Cosine of solar zenith angle
       real(kind=rb) :: adjflux(ncol,jpband)        ! adjustment for current Earth/Sun distance
-      real(kind=rb) :: solvar(jpband)         ! solar constant scaling factor from rrtmg_sw
+      real(kind=rb) :: solvar(ncol,jpband)         ! solar constant scaling factor from rrtmg_sw
                                               !  default value of 1368.22 Wm-2 at 1 AU
       real(kind=rb) :: albdir(ncol,nbndsw)         ! surface albedo, direct          ! zalbp
       real(kind=rb) :: albdif(ncol,nbndsw)         ! surface albedo, diffuse         ! zalbd
