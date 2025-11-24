@@ -9930,7 +9930,7 @@ end subroutine rrtmg_sw
          adjflux(iplon,ib) = adjflx * solvar(iplon,ib)
       enddo
       !  Set surface temperature.
-      tbound = tsfc(iplon)
+      tbound(iplon) = tsfc(iplon)
 
       !  Install input GCM arrays into RRTMG_SW arrays for pressure, temperature,
       !  and molecular amounts.  
