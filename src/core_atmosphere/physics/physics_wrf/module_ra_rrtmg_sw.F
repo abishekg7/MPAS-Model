@@ -2154,7 +2154,7 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
       real(kind=rb) :: factor
       real(kind=rb) :: fint
 
-      real(kind=rb), dimension(ncol) :: taucldorig_a, taucloud_a, ssacloud_a, ffp, ffp1, ffpssa
+      real(kind=rb) :: taucldorig_a, taucloud_a, ssacloud_a, ffp, ffp1, ffpssa
       real(kind=rb) :: tauiceorig, scatice, ssaice, tauice, tauliqorig, scatliq, ssaliq, tauliq
       real(kind=rb) :: tausnoorig, scatsno, ssasno, tausno
 
@@ -2186,17 +2186,17 @@ subroutine cldprmc_sw(ncol,nlayers, inflag, iceflag, liqflag, zcldfmc, &
                if (inflag .eq. 0) then
                   ! Cloud optical properties already defined in ztaucmc, zssacmc, zasmcmc are unscaled;
                   ! Apply delta-M scaling here (using Henyey-Greenstein approximation)
-                  taucldorig_a(iplon) = ztaucmc(iplon,lay,ig)
-                  ffp(iplon) = fsfcmc(iplon,ig,lay)
-                  ffp1(iplon) = 1.0_rb - ffp(iplon)
-                  ffpssa(iplon) = 1.0_rb - ffp(iplon) * zssacmc(iplon,lay,ig)
-                  ssacloud_a(iplon) = ffp1(iplon) * zssacmc(iplon,lay,ig) / ffpssa(iplon)
-                  taucloud_a(iplon) = ffpssa(iplon) * taucldorig_a(iplon)
+                  taucldorig_a = ztaucmc(iplon,lay,ig)
+                  ffp = fsfcmc(iplon,ig,lay)
+                  ffp1 = 1.0_rb - ffp
+                  ffpssa = 1.0_rb - ffp * zssacmc(iplon,lay,ig)
+                  ssacloud_a = ffp1 * zssacmc(iplon,lay,ig) / ffpssa
+                  taucloud_a = ffpssa * taucldorig_a
 
-                  ztaormc(iplon,lay,ig) = taucldorig_a(iplon)
-                  zssacmc(iplon,lay,ig) = ssacloud_a(iplon)
-                  ztaucmc(iplon,lay,ig) = taucloud_a(iplon)
-                  zasmcmc(iplon,lay,ig) = (zasmcmc(iplon,lay,ig) - ffp(iplon)) / (ffp1(iplon))
+                  ztaormc(iplon,lay,ig) = taucldorig_a
+                  zssacmc(iplon,lay,ig) = ssacloud_a
+                  ztaucmc(iplon,lay,ig) = taucloud_a
+                  zasmcmc(iplon,lay,ig) = (zasmcmc(iplon,lay,ig) - ffp) / (ffp1)
         
                elseif (inflag .eq. 1) then 
                   stop 'INFLAG = 1 OPTION NOT AVAILABLE WITH MCICA'
