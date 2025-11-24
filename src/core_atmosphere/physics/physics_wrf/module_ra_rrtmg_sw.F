@@ -10810,6 +10810,30 @@ allocate(clwpth(ncol,kts:kte+1),ciwpth(ncol,kts:kte+1),cswpth(ncol,kts:kte+1), &
          enddo
 
 
+
+         deallocate(tsfc)
+         deallocate(landfrac)
+         deallocate(landm)
+         deallocate(snowh)
+         deallocate(icefrac)
+         deallocate(asdir,asdif,aldir,aldif)
+         deallocate(coszen,pdel,cicewp,cliqwp,csnowp)
+         deallocate(reliq,reice,resnow)
+         deallocate(ecaer)
+         deallocate(play,hlay,tlay,h2ovmr,o3vmr,co2vmr,o2vmr,ch4vmr,n2ovmr)
+         deallocate(clwpth,ciwpth,cswpth,rel,rei,res,cldfrac,relqmcl,reicmcl,resnmcl)
+         deallocate(swhr,swhrc)
+         deallocate(plev,tlev)
+         deallocate(swuflx,swdflx,swuflxc,swdflxc)
+         deallocate(swuflxcln,swdflxcln)
+         deallocate(sibvisdir,sibvisdif,sibnirdir,sibnirdif)
+         deallocate(swdkdir,swdkdif,swdkdirc)
+         deallocate(tauaer,ssaaer,asmaer)
+         deallocate(taucld,ssacld,asmcld,fsfcld)
+         deallocate(cldfmcl,clwpmcl,ciwpmcl,cswpmcl,taucmcl,ssacmcl,asmcmcl,fsfcmcl)
+
+
+
  end subroutine rrtmg_swrad
 !------------------------------------------------------------------
 
