@@ -9911,7 +9911,7 @@ end subroutine rrtmg_sw
    endif
 
 
-   do iplon = 1, ncol
+   
       ! Set incoming solar flux adjustment to include adjustment for
    ! current Earth/Sun distance (ADJFLX) and scaling of default internal
    ! solar constant (rrsw_scon = 1368.22 Wm-2) by band (SOLVAR).  SOLVAR can be set 
@@ -9919,12 +9919,14 @@ end subroutine rrtmg_sw
    ! band, which may be necessary for paleoclimate simulations. 
 ! 
       do ib = jpb1,jpb2
+         do iplon = 1, ncol
 !         solvar(ib) = 1._rb
          solvar(iplon,ib) = scon / rrsw_scon 
          adjflux(iplon,ib) = adjflx * solvar(iplon,ib)
+         enddo
       enddo
       !  Set surface temperature.
-      tbound(iplon) = tsfc(iplon)
+      tbound(1:ncol) = tsfc(1:ncol)
 
       !  Install input GCM arrays into RRTMG_SW arrays for pressure, temperature,
       !  and molecular amounts.  
@@ -9940,9 +9942,10 @@ end subroutine rrtmg_sw
       !  assumes GCM input fields are also bottom to top. Input layer indexing
       !  from GCM fields should be reversed here if necessary.
 
-      pz(iplon,0) = plev(iplon,1)
-      tz(iplon,0) = tlev(iplon,1)
+      pz(1:ncol,0) = plev(1:ncol,1)
+      tz(1:ncol,0) = tlev(1:ncol,1)
       do l = 1, nlayers
+         do iplon = 1, ncol
          pavel(iplon,l) = play(iplon,l)
          tavel(iplon,l) = tlay(iplon,l)
          pz(iplon,l) = plev(iplon,l+1)
@@ -9962,6 +9965,7 @@ end subroutine rrtmg_sw
          amm = (1._rb - wkl(iplon,1,l)) * amd + wkl(iplon,1,l) * amw            
          coldry(iplon,l) = (pz(iplon,l-1)-pz(iplon,l)) * 1.e3_rb * avogad / &
                      (1.e2_rb * grav * amm * (1._rb + wkl(iplon,1,l)))
+         enddo
       enddo
 
 ! The following section can be used to set values for an additional layer (from
@@ -9993,7 +9997,9 @@ end subroutine rrtmg_sw
 
       do l = 1, nlayers
          do imol = 1, nmol
+            do iplon = 1, ncol
             wkl(iplon,imol,l) = coldry(iplon,l) * wkl(iplon,imol,l)
+            enddo
          enddo
       enddo
 
@@ -10003,9 +10009,11 @@ end subroutine rrtmg_sw
    if (iaer .ge. 1) then 
          do ib = 1, nbndsw
             do l = 1, nlayers
+               do iplon = 1, ncol
                taua(iplon,l,ib) = tauaer(iplon,l,ib)
                ssaa(iplon,l,ib) = ssaaer(iplon,l,ib)
                asma(iplon,l,ib) = asmaer(iplon,l,ib)
+               enddo
             enddo
          enddo
       endif
@@ -10023,6 +10031,7 @@ end subroutine rrtmg_sw
 
          do l = 1, nlayers
          do ig = 1, ngptsw
+            do iplon = 1, ncol
                cldfmc(iplon,ig,l) = cldfmcl(ig,iplon,l)
                taucmc(iplon,ig,l) = taucmcl(ig,iplon,l)
                ssacmc(iplon,ig,l) = ssacmcl(ig,iplon,l)
@@ -10032,13 +10041,16 @@ end subroutine rrtmg_sw
                clwpmc(iplon,ig,l) = clwpmcl(ig,iplon,l)
                if (iceflag.eq.5) then
                   cswpmc(iplon,ig,l)=cswpmcl(ig,iplon,l)
-               endif 
+               endif
+            enddo 
             enddo
+            do iplon = 1, ncol
             reicmc(iplon,l) = reicmcl(iplon,l)
             relqmc(iplon,l) = relqmcl(iplon,l)
             if (iceflag.eq.5) then
                resnmc(iplon,l) = resnmcl(iplon,l)
-            endif 
+            endif
+         enddo
          enddo
 
 ! If an extra layer is being used in RRTMG, set all cloud properties to zero in the extra layer.
