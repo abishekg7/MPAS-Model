@@ -81,7 +81,6 @@ module mpas_bootstrapping
 #ifdef MPAS_PIO_SUPPORT
       use pio, only : file_desc_t
 #endif
-      use mpas_timer, only : mpas_timer_start, mpas_timer_stop
 
       implicit none
 
@@ -156,7 +155,6 @@ module mpas_bootstrapping
 
       nHalos = config_num_halos
 
-      call mpas_timer_start('bootstrap_framework_phase1')
 
       inputHandle = MPAS_io_open(trim(mesh_filename), MPAS_IO_READ, mesh_iotype, domain % ioContext, &
                                  pio_file_desc=pio_file_desc, ierr=ierr)
@@ -432,7 +430,6 @@ module mpas_bootstrapping
       deallocate(block_count)
       deallocate(readingBlock)
 
-      call mpas_timer_stop('bootstrap_framework_phase1')
 
    end subroutine mpas_bootstrap_framework_phase1 !}}}
 
