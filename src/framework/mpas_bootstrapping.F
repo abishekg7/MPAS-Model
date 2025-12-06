@@ -430,7 +430,6 @@ module mpas_bootstrapping
       deallocate(block_count)
       deallocate(readingBlock)
 
-
    end subroutine mpas_bootstrap_framework_phase1 !}}}
 
 
