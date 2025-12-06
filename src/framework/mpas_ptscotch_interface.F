@@ -1,4 +1,4 @@
-
+#ifdef MPAS_SCOTCH
 module mpas_ptscotch_interface
     use iso_c_binding, only : c_int, c_double
 #include "ptscotchf.h"
@@ -302,3 +302,4 @@ contains
 
 
 end module mpas_ptscotch_interface
+#endif

@@ -5,7 +5,7 @@
  * Additional copyright and license information can be found in the LICENSE file
  * distributed with this code, or at http://mpas-dev.github.com/license.html
  */
-
+#ifdef MPAS_SCOTCH
 #include <stddef.h>
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -192,3 +192,4 @@ void scotchm_stratexit(void * strat_ptr)
 {
 	return SCOTCH_stratExit((SCOTCH_Strat *) strat_ptr);
 }
+#endif
