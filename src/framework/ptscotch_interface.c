@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, The University Corporation for Atmospheric Research (UCAR).
+ * Copyright (c) 2025, The University Corporation for Atmospheric Research (UCAR).
  *
  * Unless noted otherwise source code is licensed under the BSD license.
  * Additional copyright and license information can be found in the LICENSE file
@@ -60,6 +60,20 @@ typedef struct Dgraph_ {
 } Dgraph2;
 
 
+/********************************************************************************
+ *
+ * scotchm_dgraphinit
+ *
+ * Initialize a SCOTCH distributed graph object using a Fortran MPI communicator.
+ *
+ * Parameters:
+ *   ptr        - pointer to a `SCOTCH_Dgraph` structure (as `void *`)
+ *   localcomm  - Fortran MPI communicator handle (`MPI_Fint`) passed as `int`
+ *
+ * Returns:
+ *   integer error code returned by `SCOTCH_dgraphInit` (0 on success).
+ *
+ ********************************************************************************/
 int scotchm_dgraphinit(void *ptr, int localcomm)
 {
 	MPI_Comm comm;
@@ -76,6 +90,24 @@ int scotchm_dgraphinit(void *ptr, int localcomm)
 }
 
 
+/********************************************************************************
+ *
+ * scotchm_dgraphbuild
+ *
+ * Build a SCOTCH distributed graph from local vertex/edge arrays.
+ *
+ * Parameters:
+ *   ptr               - pointer to a `SCOTCH_Dgraph` structure (as `void *`)
+ *   nVertices         - number of local vertices
+ *   vertloctab_1      - pointer to Fortran-style vertex index array (based)
+ *   nLocEdgesGraph    - number of local edges in the distributed graph
+ *   edgelocsiz_1      - size of the local edge array
+ *   adjncy            - adjacency list array (edge destinations)
+ *
+ * Returns:
+ *   integer error code returned by `SCOTCH_dgraphBuild` (0 on success).
+ *
+ ********************************************************************************/
 int scotchm_dgraphbuild(void *ptr,
 						SCOTCH_Num nVertices,
 						SCOTCH_Num *vertloctab_1,
@@ -118,12 +150,42 @@ int scotchm_dgraphbuild(void *ptr,
 }
 
 
+/********************************************************************************
+ *
+ * scotchm_dgraphcheck
+ *
+ * Perform an internal consistency check of a SCOTCH distributed graph.
+ *
+ * Parameters:
+ *   ptr - pointer to a `SCOTCH_Dgraph` structure (as `void *`)
+ *
+ * Returns:
+ *   integer error code returned by `SCOTCH_dgraphCheck` (0 on success).
+ *
+ ********************************************************************************/
 int scotchm_dgraphcheck(void *ptr)
 {
 	return SCOTCH_dgraphCheck((SCOTCH_Dgraph *)ptr);
 }
 
 
+/********************************************************************************
+ *
+ * scotchm_dgraphpart
+ *
+ * Partition the distributed graph into `num_part` parts using the provided
+ * SCOTCH strategy object.
+ *
+ * Parameters:
+ *   ptr       - pointer to a `SCOTCH_Dgraph` structure (as `void *`)
+ *   num_part  - number of partitions
+ *   ptr_strat - pointer to a `SCOTCH_Strat` structure (as `void *`)
+ *   parttab   - output array receiving part numbers for local vertices
+ *
+ * Returns:
+ *   integer error code returned by `SCOTCH_dgraphPart` (0 on success).
+ *
+ ********************************************************************************/
 int scotchm_dgraphpart(void *ptr, SCOTCH_Num num_part, void *ptr_strat, SCOTCH_Num *parttab)
 {
 	SCOTCH_Dgraph *dgraph = (SCOTCH_Dgraph *)ptr;
@@ -133,6 +195,22 @@ int scotchm_dgraphpart(void *ptr, SCOTCH_Num num_part, void *ptr_strat, SCOTCH_N
 }
 
 
+/********************************************************************************
+ *
+ * scotchm_dgraphredist
+ *
+ * Redistribute a distributed SCOTCH graph given the partition table.
+ *
+ * Parameters:
+ *   ptr         - pointer to input `SCOTCH_Dgraph` structure (as `void *`)
+ *   partloctab  - partition table for local vertices
+ *   ptr_out     - pointer to output `SCOTCH_Dgraph` structure (as `void *`)
+ *   vertlocnbr  - pointer to return the number of local vertices in output
+ *
+ * Returns:
+ *   integer error code returned by `SCOTCH_dgraphRedist` (0 on success).
+ *
+ ********************************************************************************/
 int scotchm_dgraphredist(void *ptr, SCOTCH_Num *partloctab, void *ptr_out, SCOTCH_Num *vertlocnbr)
 {
 	SCOTCH_Dgraph *dgraph_in = (SCOTCH_Dgraph *)ptr;
@@ -152,6 +230,20 @@ int scotchm_dgraphredist(void *ptr, SCOTCH_Num *partloctab, void *ptr_out, SCOTC
 }
 
 
+/********************************************************************************
+ *
+ * scotchm_dgraphout
+ *
+ * Extract vertex labels (or stored IDs) for local vertices into `cell_list`.
+ *
+ * Parameters:
+ *   ptr        - pointer to a `Dgraph2` (or `SCOTCH_Dgraph`) structure (as `void *`)
+ *   cell_list  - output array to receive vertex labels for local vertices
+ *
+ * Returns:
+ *   integer error code (currently returns the local `err` variable; 0 on success).
+ *
+ ********************************************************************************/
 int scotchm_dgraphout(void *ptr, SCOTCH_Num *cell_list)
 {
 	SCOTCH_Num *permgsttab = NULL; /* Redistribution permutation array */
@@ -169,12 +261,39 @@ int scotchm_dgraphout(void *ptr, SCOTCH_Num *cell_list)
 }
 
 
+/********************************************************************************
+ *
+ * scotchm_dgraphexit
+ *
+ * Finalize/cleanup a `SCOTCH_Dgraph` object.
+ *
+ * Parameters:
+ *   ptr - pointer to a `SCOTCH_Dgraph` structure (as `void *`)
+ *
+ * Returns:
+ *   nothing (wraps `SCOTCH_dgraphExit`).
+ *
+ ********************************************************************************/
 void scotchm_dgraphexit(void *ptr)
 {
-	return SCOTCH_dgraphExit((SCOTCH_Dgraph *)ptr);
+	SCOTCH_dgraphExit((SCOTCH_Dgraph *)ptr);
 }
 
 
+/********************************************************************************
+ *
+ * scotchm_stratinit
+ *
+ * Initialize a SCOTCH strategy object and build a default strategy for
+ * distributed graph mapping.
+ *
+ * Parameters:
+ *   strat_ptr - pointer to a `SCOTCH_Strat` structure (as `void *`)
+ *
+ * Returns:
+ *   integer (0 on success).
+ *
+ ********************************************************************************/
 int scotchm_stratinit(void *strat_ptr)
 {
 	SCOTCH_stratInit((SCOTCH_Strat *)strat_ptr);
@@ -185,8 +304,21 @@ int scotchm_stratinit(void *strat_ptr)
 }
 
 
+/* ********************************************************************************
+ *
+ * scotchm_stratexit
+ *
+ * Finalize/cleanup a `SCOTCH_Strat` strategy object.
+ *
+ * Parameters:
+ *   strat_ptr - pointer to a `SCOTCH_Strat` structure (as `void *`)
+ *
+ * Returns:
+ *   nothing (wraps `SCOTCH_stratExit`).
+ *
+ ********************************************************************************/
 void scotchm_stratexit(void *strat_ptr)
 {
-	return SCOTCH_stratExit((SCOTCH_Strat *)strat_ptr);
+	SCOTCH_stratExit((SCOTCH_Strat *)strat_ptr);
 }
 #endif
