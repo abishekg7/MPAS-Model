@@ -76,7 +76,8 @@ contains
     !>                     adjacency list for local vertices
     !
     !-----------------------------------------------------------------------
-    function scotch_dgraphbuild(dgraph, nVertices, vertloctab, nLocEdgesGraph, edgelocsiz, adjncy) result(ierr)        use iso_c_binding, only : c_ptr, c_loc
+    function scotch_dgraphbuild(dgraph, nVertices, vertloctab, nLocEdgesGraph, edgelocsiz, adjncy) result(ierr)        
+        use iso_c_binding, only : c_ptr, c_loc
         use mpas_log, only : mpas_log_write
         use mpas_derived_types, only : MPAS_LOG_CRIT
 
@@ -137,7 +138,8 @@ contains
     !>   dgraph - SCOTCH_Dgraph structure to be checked
     !
     !-----------------------------------------------------------------------
-    function scotch_dgraphcheck(dgraph) result(ierr)        use mpas_log, only : mpas_log_write
+    function scotch_dgraphcheck(dgraph) result(ierr)        
+        use mpas_log, only : mpas_log_write
         use mpas_derived_types, only : MPAS_LOG_CRIT
         use iso_c_binding, only : c_ptr, c_loc
 
@@ -180,7 +182,8 @@ contains
     !>   dgraph - SCOTCH_Dgraph structure to be finalized
     !
     !-----------------------------------------------------------------------
-    subroutine scotch_dgraphexit(dgraph)        use mpas_log, only : mpas_log_write
+    subroutine scotch_dgraphexit(dgraph)        
+        use mpas_log, only : mpas_log_write
         use iso_c_binding, only : c_ptr, c_loc
 
         implicit none
@@ -212,7 +215,8 @@ contains
     !>   stradat - SCOTCH_Strat structure to be initialized
     !
     !-----------------------------------------------------------------------
-    function scotch_stratinit(stradat) result(ierr)        use mpas_log, only : mpas_log_write
+    function scotch_stratinit(stradat) result(ierr)        
+        use mpas_log, only : mpas_log_write
         use mpas_derived_types, only : MPAS_LOG_CRIT
         use iso_c_binding, only : c_ptr, c_loc
 
@@ -254,7 +258,8 @@ contains
     !>   stradat - SCOTCH_Strat structure to be finalized
     !
     !-----------------------------------------------------------------------
-    subroutine scotch_stratexit(stradat)        use mpas_log, only : mpas_log_write
+    subroutine scotch_stratexit(stradat)        
+        use mpas_log, only : mpas_log_write
         use iso_c_binding, only : c_ptr, c_loc
 
         implicit none
@@ -289,7 +294,8 @@ contains
     !>   parttab - Output array of size equal to number of local vertices,
     !
     !-----------------------------------------------------------------------
-    function scotch_dgraphpart(dgraph, num_part, stradat, parttab) result(ierr)        use mpas_log, only : mpas_log_write
+    function scotch_dgraphpart(dgraph, num_part, stradat, parttab) result(ierr)        
+        use mpas_log, only : mpas_log_write
         use mpas_derived_types, only : MPAS_LOG_CRIT
         use iso_c_binding, only : c_ptr, c_loc
 
@@ -342,7 +348,8 @@ contains
     !>   num_local_vertices - Number of local vertices in the redistributed graph
     !
     !-----------------------------------------------------------------------
-    function scotch_dgraphredist(dgraph, parttab, dgraph_out, num_local_vertices) result(ierr)        use mpas_log, only : mpas_log_write
+    function scotch_dgraphredist(dgraph, parttab, dgraph_out, num_local_vertices) result(ierr)        
+        use mpas_log, only : mpas_log_write
         use mpas_derived_types, only : MPAS_LOG_CRIT
         use iso_c_binding, only : c_ptr, c_loc
 
@@ -379,21 +386,21 @@ contains
     end function scotch_dgraphredist
 
     !-----------------------------------------------------------------------
-    !  function scotch_dgraphout
+    !  function scotch_dgraphdata
     !
     !> \brief Extract vertex labels from a SCOTCH distributed graph
     !> \author Abishek Gopal
     !> \date   8 Dec 2025
     !> \details
     !>  Extracts vertex labels or stored IDs for local vertices into the
-    !>  output array. This function wraps the C function scotchm_dgraphout.
-    !>  Returns an error code (0 if successful)
+    !>  output array. This function wraps the C function scotchm_dgraphdata.
     !> \arguments
     !>   dgraph  - SCOTCH_Dgraph structure to extract from
     !>   local_cell_list - Output array to hold vertex labels for local vertices
     !
     !-----------------------------------------------------------------------
-      function scotch_dgraphout(dgraph, local_cell_list) result(ierr)        use mpas_log, only : mpas_log_write
+     subroutine scotch_dgraphdata(dgraph, local_cell_list)        
+        use mpas_log, only : mpas_log_write
         use iso_c_binding, only : c_ptr, c_loc
 
         implicit none
@@ -401,22 +408,17 @@ contains
         doubleprecision, target, intent(in) :: dgraph (SCOTCH_DGRAPHDIM)
         integer(SCOTCH_NUMSIZE), intent(out) :: local_cell_list(*)
 
-        ! Return value
-        integer :: ierr
-
         interface
-            function scotchfdgraphout(dgraph_ptr, cell_list) bind(C, name='scotchm_dgraphout') result(err)
+            subroutine scotchfdgraphdata(dgraph_ptr, cell_list) bind(C, name='scotchm_dgraphdata')
                 use iso_c_binding, only : c_int, c_ptr
                 type(c_ptr), value :: dgraph_ptr
                 integer(c_int) :: cell_list(*)
-                integer(c_int) :: err
-            end function scotchfdgraphout
+            end subroutine scotchfdgraphdata
         end interface
 
-        ierr = scotchfdgraphout(c_loc(dgraph), local_cell_list)
+        call scotchfdgraphdata(c_loc(dgraph), local_cell_list)
 
-
-    end function scotch_dgraphout
+    end subroutine scotch_dgraphdata
 
 
 end module mpas_ptscotch_interface
