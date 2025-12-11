@@ -492,13 +492,19 @@ module mpas_block_decomp
                                   local_block_id_arr, & ! Input: the partition array
                                   scotchdgraph_redist(1), & ! Output: re-distributed graph
                                   num_local_vertices) ! Output: number of local vertices
+         
+         ! DO NOT REMOVE: This call is required if we want to read the local cell list directly after partitioning,
+         ! instead of reading it from the output partition file.
+         ! Extract the local cell list from the re-distributed graph.
+         ! allocate(local_cell_list(num_local_vertices))
+         ! call scotch_dgraphdata(scotchdgraph_redist(1), local_cell_list)
+         ! do i=1,num_local_vertices
+         !    call mpas_log_write('local_cell_list($i): $i',MPAS_LOG_ERR, intArgs=(/i,local_cell_list(i)/))
+         ! end do
 
-         allocate(local_cell_list(num_local_vertices))
-         allocate(local_block_list(num_local_vertices))
-         
-         ierr = scotch_dgraphout (scotchdgraph_redist(1), local_cell_list)
-         
          ! NOTE: TODO: local_block_list might not be the same as proc_id when num blocks > 0?
+
+         allocate(local_block_list(num_local_vertices))
          
          local_block_list(:)=dminfo % my_proc_id
          
@@ -564,8 +570,15 @@ module mpas_block_decomp
          call scotch_dgraphexit (scotchdgraph (1))
          call scotch_dgraphexit (scotchdgraph_redist (1))
          call scotch_stratexit (stradat (1))
+
          deallocate(edgeloctab)
          deallocate(vertloctab)
+         deallocate(local_block_list)
+         deallocate(local_nvertices)
+         deallocate(global_start)
+         deallocate(global_block_id_arr)
+         deallocate(local_block_id_arr)
+
          call MPI_Comm_free(localcomm, mpi_ierr)
          call mpas_timer_stop('scotch_total')
          call mpas_log_write('Scotch partition successful')
