@@ -16,50 +16,6 @@
 #include "ptscotch.h"
 
 
-
-typedef struct Dgraph_ {
-	unsigned int flagval; /*+ Graph properties                                          +*/
-	SCOTCH_Num baseval;   /*+ Base index for edge/vertex arrays                         +*/
-	SCOTCH_Num vertglbnbr;/*+ Global number of vertices                                 +*/
-	SCOTCH_Num vertglbmax;/*+ Maximum number of local vertices over all processes       +*/
-	SCOTCH_Num vertgstnbr;/*+ Number of local + ghost vertices                          +*/
-	SCOTCH_Num vertgstnnd;/*+ vertgstnbr + baseval                                      +*/
-	SCOTCH_Num vertlocnbr;/*+ Local number of vertices                                  +*/
-	SCOTCH_Num vertlocnnd;/*+ Local number of vertices + baseval                        +*/
-	SCOTCH_Num *vertloctax;/*+ Local vertex beginning index array [based]               +*/
-	SCOTCH_Num *vendloctax;/*+ Local vertex end index array [based]                     +*/
-	SCOTCH_Num *veloloctax;/*+ Local vertex load array if present                       +*/
-	SCOTCH_Num velolocsum; /*+ Local sum of all vertex loads                            +*/
-	SCOTCH_Num veloglbsum; /*+ Global sum of all vertex loads                           +*/
-	SCOTCH_Num *vnumloctax;/*+ Arrays of global vertex numbers in original graph        +*/
-	SCOTCH_Num *vlblloctax;/*+ Arrays of vertex labels (when read from file)            +*/
-	SCOTCH_Num edgeglbnbr; /*+ Global number of arcs                                    +*/
-	SCOTCH_Num edgeglbmax; /*+ Maximum number of local edges over all processes         +*/
-	SCOTCH_Num edgelocnbr; /*+ Number of local edges                                    +*/
-	SCOTCH_Num edgelocsiz; /*+ Size of local edge array (= edgelocnbr when compact)     +*/
-	SCOTCH_Num edgeglbsmx; /*+ Maximum size of local edge arrays over all processes     +*/
-	SCOTCH_Num *edgegsttax;/*+ Edge array holding local indices of neighbors [based]    +*/
-	SCOTCH_Num *edgeloctax;/*+ Edge array holding global neighbor numbers [based]       +*/
-	SCOTCH_Num *edloloctax;/*+ Edge load array                                          +*/
-	SCOTCH_Num degrglbmax; /*+ Maximum degree over all processes                        +*/
-	SCOTCH_Num pkeyglbval; /*+ Communicator key value: folded communicators are distinct+*/
-	MPI_Comm proccomm;     /*+ Graph communicator                                       +*/
-	SCOTCH_Num procglbnbr; /*+ Number of processes sharing graph data                   +*/
-	SCOTCH_Num proclocnum; /*+ Number of this process                                   +*/
-	SCOTCH_Num *procvrttab;/*+ Global array of vertex number ranges [+1,based]          +*/
-	SCOTCH_Num *proccnttab;/*+ Count array for local number of vertices                 +*/
-	SCOTCH_Num *procdsptab;/*+ Displacement array with respect to proccnttab [+1,based] +*/
-	SCOTCH_Num procngbnbr; /*+ Number of neighboring processes                          +*/
-	SCOTCH_Num procngbmax; /*+ Maximum number of neighboring processes                  +*/
-	SCOTCH_Num *procngbtab;/*+ Array of neighbor process numbers [sorted]               +*/
-	SCOTCH_Num *procrcvtab;/*+ Number of vertices to receive in ghost vertex sub-arrays +*/
-	SCOTCH_Num procsndnbr; /*+ Overall size of local send array                         +*/
-	SCOTCH_Num *procsndtab;/*+ Number of vertices to send in ghost vertex sub-arrays    +*/
-	SCOTCH_Num *procsidtab;/*+ Array of indices to build communication vectors (send)   +*/
-	SCOTCH_Num procsidnbr; /*+ Size of the send index array                             +*/
-} Dgraph2;
-
-
 /********************************************************************************
  *
  * scotchm_dgraphinit
@@ -222,42 +178,46 @@ int scotchm_dgraphredist(void *ptr, SCOTCH_Num *partloctab, void *ptr_out, SCOTC
 
 	err = SCOTCH_dgraphRedist(dgraph_in, partloctab, permgsttab, vertlocdlt, edgelocdlt, dgraph_out);
 
-	Dgraph2 *dgraph = (Dgraph2 *)dgraph_out;
-
-	*vertlocnbr = dgraph->vertlocnbr;
+	// Call SCOTCH_dgraphSize to obtain the number of local vertices in the redistributed graph
+	SCOTCH_dgraphSize(dgraph_out, NULL, vertlocnbr, NULL, NULL);
 
 	return err;
 }
 
-
 /********************************************************************************
  *
- * scotchm_dgraphout
+ * scotchm_dgraphdata
  *
  * Extract vertex labels (or stored IDs) for local vertices into `cell_list`.
  *
  * Parameters:
- *   ptr        - pointer to a `Dgraph2` (or `SCOTCH_Dgraph`) structure (as `void *`)
+ *   ptr        - pointer to a `SCOTCH_Dgraph` structure (as `void *`)
  *   cell_list  - output array to receive vertex labels for local vertices
  *
  * Returns:
  *   integer error code (currently returns the local `err` variable; 0 on success).
  *
  ********************************************************************************/
-int scotchm_dgraphout(void *ptr, SCOTCH_Num *cell_list)
+void scotchm_dgraphdata(void *ptr, SCOTCH_Num *cell_list)
 {
-	SCOTCH_Num *permgsttab = NULL; /* Redistribution permutation array */
-	SCOTCH_Num vertlocdlt = 0;     /* Extra size of local vertex array */
-	SCOTCH_Num edgelocdlt = 0;     /* Extra size of local edge array */
+	
 	int err;
 
-	Dgraph2 *dgraph = (Dgraph2 *)ptr;
+	SCOTCH_Num vertlocnbr;	
+	SCOTCH_Num *vlblloctab; /* vertex labels */
 
-	for (SCOTCH_Num i = 0; i < dgraph->vertlocnbr; i++) {
-		cell_list[i] = *(dgraph->vlblloctax + dgraph->baseval + i);
+	SCOTCH_Dgraph *dgraph = (SCOTCH_Dgraph *)ptr;
+
+	SCOTCH_dgraphData(dgraph, NULL, NULL, &vertlocnbr, NULL, NULL, 
+		             NULL, NULL, NULL, &vlblloctab,
+					 NULL, NULL, NULL, 
+					 NULL, NULL, NULL, NULL);
+
+	// Copy vertex labels to output array
+	for (SCOTCH_Num i = 0; i < vertlocnbr; i++) {
+		cell_list[i] = vlblloctab[i];
 	}
 
-	return err;
 }
 
 
