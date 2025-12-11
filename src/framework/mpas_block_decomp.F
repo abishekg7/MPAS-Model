@@ -523,7 +523,7 @@ module mpas_block_decomp
          if (trim(partitionFilePrefix) == '') then
             write(partitionFilePrefix,'(a,i0,a)') 'x1.',partial_global_graph_info%nVerticesTotal,'.graph.info.part.'
          end if
-         write(filename,'(a,i0)') trim(partitionFilePrefix), dminfo % total_blocks
+         write(filename,'(a,i0)') trim(partitionFilePrefix), dminfo % nProcs
          
          call mpas_log_write('Writing out Scotch Graph paritioning data to '//trim(filename))
          call mpas_new_unit(ounit)
