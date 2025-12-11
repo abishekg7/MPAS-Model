@@ -257,7 +257,8 @@ void scotchm_dgraphexit(void *ptr)
 int scotchm_stratinit(void *strat_ptr)
 {
 	SCOTCH_stratInit((SCOTCH_Strat *)strat_ptr);
-	/*SCOTCH_stratDgraphMapBuild ((SCOTCH_Strat *) strat_ptr, SCOTCH_STRATDEFAULT, 16, 16, 0.03);*/
+	
+	// This was required to avoid crashes when scaling up to large core counts
 	SCOTCH_stratDgraphMapBuild((SCOTCH_Strat *)strat_ptr, SCOTCH_STRATSCALABILITY, 1, 0, 0.05);
 
 	return 0;

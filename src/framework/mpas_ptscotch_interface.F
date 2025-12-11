@@ -4,26 +4,23 @@ module mpas_ptscotch_interface
 #include "ptscotchf.h"
     public :: scotch_dgraphinit, scotch_dgraphbuild
 
-    
-
 contains
 
     !-----------------------------------------------------------------------
-    !  function scotch_dgraphinit
+    !  subroutine scotch_dgraphinit
     !
     !> \brief Initialize a SCOTCH distributed graph object
     !> \author Abishek Gopal
     !> \date   8 Dec 2025
     !> \details
     !>  Initializes a SCOTCH_Dgraph structure using a Fortran MPI communicator.
-    !>  This function wraps the C function scotchm_dgraphinit.
-    !>  Returns an error code (0 if successful)
+    !>  This subroutine wraps the C function scotchm_dgraphinit.
     !> \arguments
     !>   dgraph - SCOTCH_Dgraph structure to be initialized
     !>   comm   - Fortran MPI communicator integer
     !
     !-----------------------------------------------------------------------
-    function scotch_dgraphinit(dgraph, comm) result(ierr)
+    subroutine scotch_dgraphinit(dgraph, comm)
         use iso_c_binding, only : c_ptr, c_loc
         use mpas_log, only : mpas_log_write
         use mpas_derived_types, only : MPAS_LOG_CRIT
@@ -53,18 +50,17 @@ contains
             call mpas_log_write('Successfully initialized distributed Scotch graph')    
         end if
 
-    end function scotch_dgraphinit
+    end subroutine scotch_dgraphinit
 
     !-----------------------------------------------------------------------
-    !  function scotch_dgraphbuild
+    !  subroutine scotch_dgraphbuild
     !
     !> \brief Build a SCOTCH distributed graph from local vertex/edge arrays
     !> \author Abishek Gopal
     !> \date   8 Dec 2025
     !> \details
     !>  Constructs a SCOTCH_Dgraph from local vertex and edge connectivity data.
-    !>  This function wraps the C function scotchm_dgraphbuild, and returns an 
-    !>  error code (0 if successful).
+    !>  This subroutine wraps the C function scotchm_dgraphbuild
     !> \arguments
     !>   dgraph         - SCOTCH_Dgraph structure to be built
     !>   nVertices      - Number of local vertices
@@ -76,7 +72,7 @@ contains
     !>                     adjacency list for local vertices
     !
     !-----------------------------------------------------------------------
-    function scotch_dgraphbuild(dgraph, nVertices, vertloctab, nLocEdgesGraph, edgelocsiz, adjncy) result(ierr)        
+    subroutine scotch_dgraphbuild(dgraph, nVertices, vertloctab, nLocEdgesGraph, edgelocsiz, adjncy)
         use iso_c_binding, only : c_ptr, c_loc
         use mpas_log, only : mpas_log_write
         use mpas_derived_types, only : MPAS_LOG_CRIT
@@ -89,8 +85,6 @@ contains
         integer(SCOTCH_NUMSIZE), intent(in) :: nLocEdgesGraph
         integer(SCOTCH_NUMSIZE), intent(in) :: edgelocsiz
         integer(SCOTCH_NUMSIZE), intent(in) :: adjncy(nLocEdgesGraph)
-
-
 
         ! Return value
         integer :: ierr
@@ -109,7 +103,6 @@ contains
             end function scotchfdgraphbuild
         end interface
 
-
         ierr = 0
 
         ierr = scotchfdgraphbuild(c_loc(dgraph), nVertices, vertloctab,  &   
@@ -121,24 +114,22 @@ contains
             call mpas_log_write('Successfully built distributed Scotch graph')    
         end if
 
-
-    end function scotch_dgraphbuild
+    end subroutine scotch_dgraphbuild
 
     !-----------------------------------------------------------------------
-    !  function scotch_dgraphcheck
+    !  subroutine scotch_dgraphcheck
     !
     !> \brief Perform consistency check on a SCOTCH distributed graph
     !> \author Abishek Gopal
     !> \date   8 Dec 2025
     !> \details
     !>  Validates the internal structure of a SCOTCH_Dgraph for consistency.
-    !>  This function wraps the C function scotchm_dgraphcheck.
-    !>  Returns an error code (0 if successful)
+    !>  This subroutine wraps the C function scotchm_dgraphcheck.
     !> \arguments
     !>   dgraph - SCOTCH_Dgraph structure to be checked
     !
     !-----------------------------------------------------------------------
-    function scotch_dgraphcheck(dgraph) result(ierr)        
+    subroutine scotch_dgraphcheck(dgraph)    
         use mpas_log, only : mpas_log_write
         use mpas_derived_types, only : MPAS_LOG_CRIT
         use iso_c_binding, only : c_ptr, c_loc
@@ -166,8 +157,7 @@ contains
             call mpas_log_write('Successfully checked distributed Scotch graph')    
         end if
 
-
-    end function scotch_dgraphcheck
+    end subroutine scotch_dgraphcheck
 
     !-----------------------------------------------------------------------
     !  subroutine scotch_dgraphexit
@@ -202,7 +192,7 @@ contains
     end subroutine scotch_dgraphexit
 
     !-----------------------------------------------------------------------
-    !  function scotch_stratinit
+    !  subroutine scotch_stratinit
     !
     !> \brief Initialize a SCOTCH strategy object
     !> \author Abishek Gopal
@@ -210,12 +200,12 @@ contains
     !> \details
     !>  Initializes a SCOTCH_Strat structure and builds a default strategy
     !>  for distributed graph mapping. This function wraps the C function
-    !>  scotchm_stratinit. Returns an error code (0 if successful)
+    !>  scotchm_stratinit.
     !> \arguments
     !>   stradat - SCOTCH_Strat structure to be initialized
     !
     !-----------------------------------------------------------------------
-    function scotch_stratinit(stradat) result(ierr)        
+    subroutine scotch_stratinit(stradat)
         use mpas_log, only : mpas_log_write
         use mpas_derived_types, only : MPAS_LOG_CRIT
         use iso_c_binding, only : c_ptr, c_loc
@@ -243,7 +233,7 @@ contains
             call mpas_log_write('Successfully initialized Scotch strategy')
         end if
 
-    end function scotch_stratinit
+    end subroutine scotch_stratinit
 
     !-----------------------------------------------------------------------
     !  subroutine scotch_stratexit
@@ -278,15 +268,15 @@ contains
     end subroutine scotch_stratexit
 
     !-----------------------------------------------------------------------
-    !  function scotch_dgraphpart
+    !  subroutine scotch_dgraphpart
     !
     !> \brief Partition a SCOTCH distributed graph
     !> \author Abishek Gopal
     !> \date   8 Dec 2025
     !> \details
     !>  Partitions the distributed graph into num_part parts using the
-    !>  provided SCOTCH strategy object. This function wraps the C function
-    !>  scotchm_dgraphpart. Returns an error code (0 if successful)
+    !>  provided SCOTCH strategy object. This subroutine wraps the C function
+    !>  scotchm_dgraphpart.
     !> \arguments
     !>   dgraph  - SCOTCH_Dgraph structure to be partitioned
     !>   num_part - Number of partitions
@@ -294,7 +284,7 @@ contains
     !>   parttab - Output array of size equal to number of local vertices,
     !
     !-----------------------------------------------------------------------
-    function scotch_dgraphpart(dgraph, num_part, stradat, parttab) result(ierr)        
+    subroutine scotch_dgraphpart(dgraph, num_part, stradat, parttab)
         use mpas_log, only : mpas_log_write
         use mpas_derived_types, only : MPAS_LOG_CRIT
         use iso_c_binding, only : c_ptr, c_loc
@@ -328,18 +318,17 @@ contains
             call mpas_log_write('Successfully partitioned distributed Scotch graph')
         end if
 
-    end function scotch_dgraphpart
+    end subroutine scotch_dgraphpart
 
     !-----------------------------------------------------------------------
-    !  function scotch_dgraphredist
+    !  subroutine scotch_dgraphredist
     !
     !> \brief Redistribute a SCOTCH distributed graph according to partitions
     !> \author Abishek Gopal
     !> \date   8 Dec 2025
     !> \details
     !>  Redistributes the distributed graph structure based on a partition
-    !>  table. This function wraps the C function scotchm_dgraphredist.
-    !>  Returns an error code (0 if successful)
+    !>  table. This subroutine wraps the C function scotchm_dgraphredist.
     !> \arguments
     !>   dgraph  - SCOTCH_Dgraph structure to be redistributed
     !>   parttab - Input array of size equal to number of local vertices,
@@ -348,7 +337,7 @@ contains
     !>   num_local_vertices - Number of local vertices in the redistributed graph
     !
     !-----------------------------------------------------------------------
-    function scotch_dgraphredist(dgraph, parttab, dgraph_out, num_local_vertices) result(ierr)        
+    subroutine scotch_dgraphredist(dgraph, parttab, dgraph_out, num_local_vertices)
         use mpas_log, only : mpas_log_write
         use mpas_derived_types, only : MPAS_LOG_CRIT
         use iso_c_binding, only : c_ptr, c_loc
@@ -382,18 +371,17 @@ contains
             call mpas_log_write('Successfully redistributed Scotch graph')
         end if
 
-
-    end function scotch_dgraphredist
+    end subroutine scotch_dgraphredist
 
     !-----------------------------------------------------------------------
-    !  function scotch_dgraphdata
+    !  subroutine scotch_dgraphdata
     !
     !> \brief Extract vertex labels from a SCOTCH distributed graph
     !> \author Abishek Gopal
     !> \date   8 Dec 2025
     !> \details
     !>  Extracts vertex labels or stored IDs for local vertices into the
-    !>  output array. This function wraps the C function scotchm_dgraphdata.
+    !>  output array. This subroutine wraps the C function scotchm_dgraphdata.
     !> \arguments
     !>   dgraph  - SCOTCH_Dgraph structure to extract from
     !>   local_cell_list - Output array to hold vertex labels for local vertices
@@ -419,7 +407,6 @@ contains
         call scotchfdgraphdata(c_loc(dgraph), local_cell_list)
 
     end subroutine scotch_dgraphdata
-
 
 end module mpas_ptscotch_interface
 #endif
