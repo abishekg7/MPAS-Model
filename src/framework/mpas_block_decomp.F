@@ -143,7 +143,12 @@ module mpas_block_decomp
 
          if (useScotch) then ! Using PT-Scotch across all MPI ranks
 
-            call mpas_block_decomp_scotch(dminfo, partial_global_graph_info, dminfo % total_blocks, blockFilePrefix)
+            ! Pre-emptively blocking this untested code path. 
+            if (numBlocks /= 0) then
+               call mpas_log_write('Scotch partitioning not available when config_number_of_blocks != 0 ', MPAS_LOG_CRIT)
+            end if
+
+            call mpas_block_decomp_scotch(dminfo, partial_global_graph_info, blockFilePrefix)
 
             if (dminfo % my_proc_id == IO_NODE) then
                open(unit=iunit, file=trim(filename), form='formatted', status='old', iostat=istatus)
@@ -342,7 +347,7 @@ module mpas_block_decomp
 !
 !-----------------------------------------------------------------------
 #ifdef MPAS_SCOTCH
-   subroutine mpas_block_decomp_scotch(dminfo, partial_global_graph_info, totalBlocks, blockFilePrefix)!{{{
+   subroutine mpas_block_decomp_scotch(dminfo, partial_global_graph_info, blockFilePrefix)!{{{
 
       use mpas_timer, only : mpas_timer_start, mpas_timer_stop
 #ifdef MPAS_USE_MPI_F08
@@ -355,7 +360,6 @@ module mpas_block_decomp
 
       type (dm_info), intent(inout) :: dminfo !< Input: domain information
       type (graph), intent(in) :: partial_global_graph_info !< Input: Global graph information
-      integer, intent(in) :: totalBlocks !< Input: Number of blocks (from config_num_blocks)
       character (len=*), intent(in) :: blockFilePrefix !< Input: File prefix for block decomposition
 
       integer, dimension(:), pointer :: global_start
@@ -471,7 +475,6 @@ module mpas_block_decomp
       
       call mpas_timer_start('scotch_graph_partitioning')
       ! Partition the distributed graph and save the result in local_block_id_arr
-      ! TODO: Should this be totalBlocks instead of nProcs?
       npart = dminfo % nProcs
       ierr = scotch_dgraphpart (scotchdgraph(1), npart, stradat (1), local_block_id_arr(1))
       ! do i=1,partial_global_graph_info % nVertices
