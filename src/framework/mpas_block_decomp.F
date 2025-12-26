@@ -232,7 +232,7 @@ module mpas_block_decomp
 
            close(unit=iunit)
            call mpas_release_unit(iunit)
-           
+
         else
 
            call mpas_dmpar_bcast_ints(dminfo, dminfo % nprocs, local_nvertices)
@@ -521,7 +521,7 @@ module mpas_block_decomp
       if (dminfo % my_proc_id == IO_NODE) then
          partitionFilePrefix=trim(blockFilePrefix)
          if (trim(partitionFilePrefix) == '') then
-            write(partitionFilePrefix,'(a,i0,a)') 'x1.',partial_global_graph_info%nVerticesTotal,'.graph.info.part.'
+            write(partitionFilePrefix,'(a,i0,a)') 'grid.',partial_global_graph_info%nVerticesTotal,'.graph.info.part.'
          end if
          write(filename,'(a,i0)') trim(partitionFilePrefix), dminfo % nProcs
          

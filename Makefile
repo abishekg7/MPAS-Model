@@ -1429,7 +1429,7 @@ scotch_fortran_test:
 	@#
 	@# Create a Fortran test program that will link against the SCOTCH library
 	@#
-	$(info Checking for a working MUSICA-Fortran library...)
+	$(info Checking for a working Scotch library...)
 	$(eval SCOTCH_FORTRAN_TEST := $(shell $\
 		printf "program test_scotch_fortran\n$\
 		&   include \"ptscotchf.h\"\n$\
