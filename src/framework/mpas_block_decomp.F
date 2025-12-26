@@ -425,7 +425,7 @@ module mpas_block_decomp
       vertloctab(partial_global_graph_info % nVertices+1) = nLocEdgesGraph + 1
 
       ! Duplicate the communicator to be used by Scotch
-      call MPI_Comm_dup(MPI_COMM_WORLD, localcomm, mpi_ierr)
+      call MPI_Comm_dup(dminfo % comm, localcomm, mpi_ierr)
       if (mpi_ierr .ne. 0) then
             call mpas_log_write('Cannot duplicate communicator')
       endif
