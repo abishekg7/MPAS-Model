@@ -139,6 +139,7 @@ module mpas_block_decomp
             end if
          end if
 
+#ifdef MPAS_SCOTCH
          call mpas_dmpar_bcast_logical(dminfo, useScotch)
 
          if (useScotch) then ! Using PT-Scotch across all MPI ranks
@@ -158,6 +159,7 @@ module mpas_block_decomp
                end if
             end if
          end if
+#endif
 
          if (dminfo % my_proc_id == IO_NODE) then
 
