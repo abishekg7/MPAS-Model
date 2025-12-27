@@ -149,10 +149,12 @@ module mpas_block_decomp
                call mpas_log_write('Scotch partitioning not available when config_number_of_blocks != 0 ', MPAS_LOG_CRIT)
             end if
 
-            call mpas_block_decomp_scotch(dminfo, partial_global_graph_info, blockFilePrefix)
+            call mpas_log_write('No existing block decomposition file found, invoking Scotch.')
+            call mpas_block_decomp_scotch(dminfo, partial_global_graph_info, blockFilePrefix, filename)
 
             if (dminfo % my_proc_id == IO_NODE) then
                open(unit=iunit, file=trim(filename), form='formatted', status='old', iostat=istatus)
+               call mpas_log_write('After Scotch decomposition, attempting to read block decomposition file: '//trim(filename))
                if (istatus /= 0) then
                   call mpas_log_write('Could not open block decomposition file for $i blocks.', MPAS_LOG_ERR, intArgs=(/dminfo % total_blocks/) )
                   call mpas_log_write('Filename: '//trim(filename), MPAS_LOG_CRIT)
@@ -349,7 +351,7 @@ module mpas_block_decomp
 !
 !-----------------------------------------------------------------------
 #ifdef MPAS_SCOTCH
-   subroutine mpas_block_decomp_scotch(dminfo, partial_global_graph_info, blockFilePrefix)!{{{
+   subroutine mpas_block_decomp_scotch(dminfo, partial_global_graph_info, blockFilePrefix, blockFilename)!{{{
 
       use mpas_timer, only : mpas_timer_start, mpas_timer_stop
 #ifdef MPAS_USE_MPI_F08
@@ -363,6 +365,7 @@ module mpas_block_decomp
       type (dm_info), intent(inout) :: dminfo !< Input: domain information
       type (graph), intent(in) :: partial_global_graph_info !< Input: Global graph information
       character (len=*), intent(in) :: blockFilePrefix !< Input: File prefix for block decomposition
+      character (len=*), intent(out) :: blockFilename !< Output: Block decomposition file name
 
       integer, dimension(:), pointer :: global_start
       integer, dimension(:), allocatable :: local_cell_list
@@ -373,7 +376,7 @@ module mpas_block_decomp
       integer :: err, ierr
       integer, dimension(:), pointer :: local_nvertices
       integer :: num_local_vertices !< Number of local vertices for this processor
-      character (len=StrKIND) :: filename, msg
+      character (len=StrKIND) :: msg
 
       integer :: nLocEdgesGraph = 0, nLocVerticesGraph = 0, edgelocsiz = 0, npart = 1
       character (len=StrKIND) :: partitionFilePrefix
@@ -523,13 +526,13 @@ module mpas_block_decomp
       if (dminfo % my_proc_id == IO_NODE) then
          partitionFilePrefix=trim(blockFilePrefix)
          if (trim(partitionFilePrefix) == '') then
-            write(partitionFilePrefix,'(a,i0,a)') 'grid.',partial_global_graph_info%nVerticesTotal,'.graph.info.part.'
+            write(partitionFilePrefix,'(i0,a)') partial_global_graph_info%nVerticesTotal,'.graph.info.part.'
          end if
-         write(filename,'(a,i0)') trim(partitionFilePrefix), dminfo % nProcs
+         write(blockFilename,'(a,i0)') trim(partitionFilePrefix), dminfo % nProcs
          
-         call mpas_log_write('Writing out Scotch Graph paritioning data to '//trim(filename))
+         call mpas_log_write('Writing out Scotch Graph paritioning data to '//trim(blockFilename))
          call mpas_new_unit(ounit)
-         open(unit=ounit, file=trim(filename), form='formatted', status='new', action="write", iostat=ostatus)
+         open(unit=ounit, file=trim(blockFilename), form='formatted', status='new', action="write", iostat=ostatus)
          do i=1,partial_global_graph_info % nVerticesTotal
             write(unit=ounit, fmt='(i0)', iostat=err) global_block_id_arr(i)
          end do
