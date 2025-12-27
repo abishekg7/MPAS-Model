@@ -1427,9 +1427,34 @@ musica_fortran_test:
 
 scotch_fortran_test:
 	@#
-	@# Create a Fortran test program that will link against the SCOTCH library
+	@# Create C and Fortran test programs and try to build against the PT-SCOTCH library
 	@#
 	$(info Checking for a working Scotch library...)
+	$(eval SCOTCH_C_TEST := $(shell $\
+	    printf "#include <stdio.h>\n\
+			&#include \"mpi.h\"\n\
+			&#include \"ptscotch.h\"\n\
+			&int main(){\n\
+			&    int err;\n\
+			&    SCOTCH_Dgraph *dgraph;\n\
+			&    err = SCOTCH_dgraphInit(dgraph, MPI_COMM_WORLD);\n\
+			&    SCOTCH_dgraphExit(dgraph);\n\
+			&    return err;\n\
+			&}\n" | sed 's/&/ /' > ptscotch_c_test.c; $\
+		$\
+		$(CC) $(CPPINCLUDES) $(CFLAGS) $(LDFLAGS) ptscotch_c_test.c -o ptscotch_c_test.x $(SCOTCH_LIBS) > ptscotch_c_test.log 2>&1; $\
+		scotch_c_status=$$?; $\
+		if [ $$scotch_c_status -eq 0 ]; then $\
+			printf "1"; $\
+			rm -f ptscotch_c_test.c ptscotch_c_test.x ptscotch_c_test.log; $\
+		else $\
+			printf "0"; $\
+		fi $\
+	))
+	$(if $(findstring 0,$(SCOTCH_C_TEST)), $(error Could not build a simple C program with Scotch. $\
+		Test program ptscotch_c_test.c and output ptscotch_c_test.log have been left $\
+	    in the top-level MPAS directory for further debugging ))
+	$(if $(findstring 1,$(SCOTCH_C_TEST)), $(info Built a simple C program with Scotch ))
 	$(eval SCOTCH_FORTRAN_TEST := $(shell $\
 		printf "program test_scotch_fortran\n$\
 		&   include \"ptscotchf.h\"\n$\
@@ -1438,19 +1463,21 @@ scotch_fortran_test:
 		&   ierr = 0\n$\
 		&   call scotchfgraphinit(scotchgraph (1), ierr)\n$\
 		&   call scotchfgraphexit(scotchgraph(1))\n$\
-		end program test_scotch_fortran\n" | sed 's/&/ /' > test_scotch_fortran.f90; $\
+		end program test_scotch_fortran\n" | sed 's/&/ /' > ptscotch_f_test.f90; $\
 		$\
-		$(FC) $(SCOTCH_FCINCLUDES) $(SCOTCH_FFLAGS) test_scotch_fortran.f90 -o test_scotch_fortran.x $(SCOTCH_LIBS) > /dev/null 2>&1; $\
+		$(FC) $(SCOTCH_FCINCLUDES) $(SCOTCH_FFLAGS) ptscotch_f_test.f90 -o ptscotch_f_test.x $(SCOTCH_LIBS) > ptscotch_f_test.log 2>&1; $\
 		scotch_fortran_status=$$?; $\
-		rm -f test_scotch_fortran.f90 test_scotch_fortran.x; $\
 		if [ $$scotch_fortran_status -eq 0 ]; then $\
 			printf "1"; $\
+			rm -f ptscotch_f_test.f90 ptscotch_f_test.x ptscotch_f_test.log; $\
 		else $\
 			printf "0"; $\
 		fi $\
 	))
-	$(if $(findstring 0,$(SCOTCH_FORTRAN_TEST)), $(error Could not build a simple test program with Scotch))
-	$(if $(findstring 1,$(SCOTCH_FORTRAN_TEST)), $(info Built a simple test program with Scotch ))
+	$(if $(findstring 0,$(SCOTCH_FORTRAN_TEST)), $(error Could not build a simple Fortran program with Scotch. $\
+		Test program ptscotch_f_test.f90 and output ptscotch_f_test.log have been left $\
+	    in the top-level MPAS directory for further debugging ))
+	$(if $(findstring 1,$(SCOTCH_FORTRAN_TEST)), $(info Built a simple Fortran program with Scotch ))
 
 pnetcdf_test:
 	@#
