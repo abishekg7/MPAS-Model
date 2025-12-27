@@ -399,8 +399,6 @@ module mpas_block_decomp
 
       call mpas_timer_start('scotch_total')
 
-      call mpas_log_write('Using LibScotch for graph partitioning')
-
       ! Count the number of edges (including to ghost cells) in the portion of graph
       ! owned by the current rank. Each edge is counted twice, once for each vertex,
       ! with the exception of edges to ghost vertices, which are counted only once.
@@ -451,7 +449,8 @@ module mpas_block_decomp
 
       nLocVerticesGraph = partial_global_graph_info % nVertices
 
-      call mpas_log_write('nvertices =$i  nLocEdgesGraph= $i', intArgs=(/nLocVerticesGraph, nLocEdgesGraph/))         
+      call mpas_log_write('Before SCOTCH distributed graph build. nLocVertices =$i  nLocEdges= $i', &
+                           intArgs=(/nLocVerticesGraph, nLocEdgesGraph/))
 
       ! Build the distributed Scotch graph and save it in scotchdgraph
       ! Note: Optional arguments veloloctab, vlblloctab, edgegsttab, and edloloctab are not needed here.
@@ -474,7 +473,6 @@ module mpas_block_decomp
       call scotch_dgraphpart (scotchdgraph(1), npart, stradat (1), local_block_id_arr(1))
       
       call mpas_timer_stop('scotch_graph_partitioning')
-      call mpas_log_write('Graph parition successful ')
 
       ! After the paritioning above, each processor would not necessarily have information about all of the
       ! vertices it owns. To obtain this information, Scotch provides a convenience function to redistribute the graph
