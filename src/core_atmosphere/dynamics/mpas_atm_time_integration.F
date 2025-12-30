@@ -15,7 +15,15 @@
 #endif
 
 module atm_time_integration
-
+  USE m_ser, ONLY: ser_init, ser_array
+   USE m_ser_mpas_cmp, ONLY: mpas_compare
+   USE mo_ser_common, ONLY: compare
+   USE m_ser_mpas, ONLY: mpas_set_serializer, mpas_set_savepoint
+   USE m_serialize, ONLY: fs_add_savepoint_metainfo, fs_read_field, fs_create_savepoint, fs_write_field
+   USE utils_ppser, ONLY: ppser_set_mode, ppser_initialize, ppser_get_mode, ppser_savepoint, &
+       ppser_serializer, ppser_serializer_ref, ppser_intlength, ppser_reallength, &
+       ppser_realtype, ppser_zrperturb
+   use mpas_timekeeping
    use mpas_derived_types
    use mpas_pool_routines
    use mpas_kind_types
@@ -760,6 +768,10 @@ module atm_time_integration
       call mpas_pool_get_config(block % configs, 'config_apply_lbcs', config_apply_lbcs_ptr)
 
       config_apply_lbcs = config_apply_lbcs_ptr
+
+      call mpas_get_time(nowTime, dateTimeString=xtime_new)
+      !$ser init directory='./ser_data' prefix='mpas_dycore' prefix_ref='mpas_dycore-cpu'
+      !$ser savepoint atm_srk3 datetime=xtime_new
 
       if (trim(config_time_integration) == 'SRK3') then
          call atm_srk3(domain, dt, itimestep, exchange_halo_group)
