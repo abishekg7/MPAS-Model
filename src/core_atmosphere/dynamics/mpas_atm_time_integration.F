@@ -15,10 +15,6 @@
 #endif
 
 module atm_time_integration
-  USE m_ser, ONLY: ser_init, ser_array
-   USE m_ser_mpas_cmp, ONLY: mpas_compare
-   USE mo_ser_common, ONLY: compare
-   USE m_ser_mpas, ONLY: mpas_set_serializer, mpas_set_savepoint
    USE m_serialize, ONLY: fs_add_savepoint_metainfo, fs_read_field, fs_create_savepoint, fs_write_field
    USE utils_ppser, ONLY: ppser_set_mode, ppser_initialize, ppser_get_mode, ppser_savepoint, &
        ppser_serializer, ppser_serializer_ref, ppser_intlength, ppser_reallength, &
@@ -759,6 +755,8 @@ module atm_time_integration
       type (mpas_pool_type), pointer :: state
       character (len=StrKIND), pointer :: config_time_integration
       logical, pointer :: config_apply_lbcs_ptr
+      character(len=StrKIND) :: timeStamp
+      character(len=StrKIND) :: savepoint_name
 
 
       clock => domain % clock
@@ -770,7 +768,8 @@ module atm_time_integration
       config_apply_lbcs = config_apply_lbcs_ptr
 
       call mpas_get_time(nowTime, dateTimeString=xtime_new)
-      !$ser init directory='./ser_data' prefix='mpas_dycore' prefix_ref='mpas_dycore-cpu'
+      !!$ser init directory='./ser_data' prefix='mpas_dycore' prefix_ref='mpas_dycore-cpu'
+      !$ser init directory='./ser_data' prefix='mpas_dycore'
       !$ser savepoint atm_srk3 datetime=xtime_new
 
       if (trim(config_time_integration) == 'SRK3') then
@@ -3347,6 +3346,10 @@ module atm_time_integration
          end do
          !$acc end parallel
       end if
+
+      !$ser verbatim call fs_add_savepoint_metainfo(ppser_savepoint, 'rk_step', rk_step)
+      !$ser mode write
+      !$ser data rtheta_p=rtheta_p
 
       ! recover time-averaged ruAvg on all edges of owned cells (for upcoming scalar transport).
       ! we solved for these in the acoustic-step loop.

@@ -1,12 +1,9 @@
 .SUFFIXES: .F .o
 
-#OBJS = mpas_atm_time_integration.o \
-#       mpas_atm_boundaries.o
 
-GEN_SRC = m_ser_ser.F mpas_atm_time_integration_ser.F
+GEN_SRC = mpas_atm_time_integration_ser.F
 OBJS = $(GEN_SRC:.F=.o) mpas_atm_boundaries.o
 
-SERLIB = libsimple_m_ser.a
 
 all: $(OBJS)
 
@@ -24,12 +21,8 @@ clean:
 
 # Rule to generate m_ser_ser.F90 from m_ser.F90
 %_ser.F: %.F
-	$(SERIALBOX_ROOT)/install/python/pp_ser/pp_ser.py $< -o $@	
+	$(SERIALBOX_ROOT)/python/pp_ser/pp_ser.py $< -o $@	
 
-# Rule to create the static library
-$(SERLIB): m_ser_ser.o
-	/usr/bin/ar qc $@ $^
-	/usr/bin/ranlib $@
 
 
 .F.o:
