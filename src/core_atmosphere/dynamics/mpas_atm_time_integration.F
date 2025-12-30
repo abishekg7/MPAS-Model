@@ -16,6 +16,10 @@
 
 module atm_time_integration
 
+   USE m_serialize, ONLY: fs_add_savepoint_metainfo, fs_read_field, fs_create_savepoint, fs_write_field
+   USE utils_ppser, ONLY: ppser_set_mode, ppser_initialize, ppser_get_mode, ppser_savepoint, &
+       ppser_serializer, ppser_serializer_ref, ppser_intlength, ppser_reallength, &
+       ppser_realtype, ppser_zrperturb
    use mpas_pool_routines
    use mpas_kind_types
    use mpas_constants
@@ -805,6 +809,8 @@ module atm_time_integration
       type (mpas_pool_type), pointer :: state
       character (len=StrKIND), pointer :: config_time_integration
       logical, pointer :: config_apply_lbcs_ptr
+      character(len=StrKIND) :: timeStamp
+      character(len=StrKIND) :: savepoint_name
 
 
       clock => domain % clock
@@ -814,6 +820,12 @@ module atm_time_integration
       call mpas_pool_get_config(block % configs, 'config_apply_lbcs', config_apply_lbcs_ptr)
 
       config_apply_lbcs = config_apply_lbcs_ptr
+
+
+      call mpas_get_time(nowTime, dateTimeString=xtime_new)
+      !!$ser init directory='./ser_data' prefix='mpas_dycore' prefix_ref='mpas_dycore-cpu'
+      !$ser init directory='./ser_data' prefix='mpas_dycore'
+      !$ser savepoint atm_srk3 datetime=xtime_new
 
       if (trim(config_time_integration) == 'SRK3') then
          call atm_srk3(domain, dt, itimestep, exchange_halo_group)
@@ -5290,6 +5302,7 @@ module atm_time_integration
       real (kind=RKIND) :: reference_u
 
       type (MPAS_Time_Type) :: currTime
+      character (len=StrKIND) :: currTime_str
       integer :: H, M, S, S_n, S_d
       integer :: ierr
       real(kind=RKIND) :: time_of_day_seconds
@@ -5357,6 +5370,13 @@ module atm_time_integration
       v_mom_eddy_visc2   = config_v_mom_eddy_visc2
       v_theta_eddy_visc2 = config_v_theta_eddy_visc2
 
+
+      currTime = mpas_get_clock_time(clock, MPAS_NOW, ierr)
+      call mpas_get_time(currTime, dateTimeString=currTime_str)
+      !$ser savepoint atm_dyn_tend datetime=currTime_str rk_step=rk_step
+      !$ser mode write
+      !$ser accdata tend_u_euler=tend_u_euler
+
       if (rk_step == 1) then
 
          !$acc parallel default(present)
@@ -5398,7 +5418,7 @@ module atm_time_integration
                h_theta_eddy_visc4 = config_h_theta_eddy_visc4
 
             end if
-
+            !$ser accdata eddy_visc_horz=eddy_visc_horz
          else if (config_les_model /= "none") then
 
                  ! call mpas_log_write(' BV call, index qv, qc, tke $i $i $i ', intArgs=(/index_qv, index_qc, index_tke/))
@@ -5486,6 +5506,8 @@ module atm_time_integration
       end do
       !$acc end parallel
 
+      !$ser accdata h_divergence=h_divergence
+
       !
       ! dp / dz and tend_rho
       !
@@ -5510,6 +5532,8 @@ module atm_time_integration
 
       end if
 
+      !$ser accdata tend_rho=tend_rho
+      !$ser accdata dpdz=dpdz
 !$OMP BARRIER
 
       !
