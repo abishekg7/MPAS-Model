@@ -33,8 +33,7 @@
 int scotchm_dgraphinit(void *ptr, int localcomm)
 {
 	MPI_Comm comm;
-	MPI_Comm comm2;
-	int size, rank, err;
+	int err;
 
 	comm = MPI_Comm_f2c((MPI_Fint)localcomm);
 
@@ -84,7 +83,7 @@ int scotchm_dgraphbuild(void *ptr,
 	SCOTCH_Num *vendloctab = vertloctab_1 + 1;
 	SCOTCH_Num *edgeloctab = (SCOTCH_Num *)adjncy;
 
-	int i, err;
+	int err;
 
 	SCOTCH_Dgraph *dgraph = (SCOTCH_Dgraph *)ptr;
 
@@ -201,8 +200,6 @@ int scotchm_dgraphredist(void *ptr, SCOTCH_Num *partloctab, void *ptr_out, SCOTC
 void scotchm_dgraphdata(void *ptr, SCOTCH_Num *cell_list)
 {
 	
-	int err;
-
 	SCOTCH_Num vertlocnbr;	
 	SCOTCH_Num *vlblloctab; /* vertex labels */
 

@@ -355,7 +355,7 @@ module mpas_block_decomp
 
       use mpas_timer, only : mpas_timer_start, mpas_timer_stop
 #ifdef MPAS_USE_MPI_F08
-      use mpi_f08, only : MPI_Comm, MPI_COMM_WORLD, MPI_INTEGER, MPI_Comm_dup, MPI_Comm_free, MPI_Gather, MPI_Gatherv
+      use mpi_f08, only : MPI_Comm, MPI_INTEGER, MPI_Comm_dup, MPI_Comm_free, MPI_Gather, MPI_Gatherv
 #else
       use mpi
 #endif
@@ -372,17 +372,15 @@ module mpas_block_decomp
       integer, dimension(:), allocatable :: local_block_list
 
       integer, dimension(:), allocatable ::global_block_id_arr, local_block_id_arr
-      integer :: i, global_block_id, local_block_id, iunit, ounit, istatus, ostatus, j, k
+      integer :: i, ounit, ostatus, j, k
       integer :: err, ierr
       integer, dimension(:), pointer :: local_nvertices
       integer :: num_local_vertices !< Number of local vertices for this processor
-      character (len=StrKIND) :: msg
 
       integer :: nLocEdgesGraph = 0, nLocVerticesGraph = 0, edgelocsiz = 0, npart = 1
       character (len=StrKIND) :: partitionFilePrefix
       integer, dimension(:), allocatable :: edgeloctab, vertloctab
       doubleprecision :: stradat (scotch_stratdim)
-      doubleprecision :: scotchgraph (SCOTCH_GRAPHDIM)
       doubleprecision :: scotchdgraph (SCOTCH_DGRAPHDIM)
       doubleprecision :: scotchdgraph_redist (SCOTCH_DGRAPHDIM)
       integer :: mpi_ierr
