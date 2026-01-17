@@ -427,16 +427,16 @@ module mpas_block_decomp
 
       ! Duplicate the communicator to be used by Scotch
       call MPI_Comm_dup(dminfo % comm, localcomm, mpi_ierr)
-      if (mpi_ierr .ne. 0) then
+      if (mpi_ierr /= 0) then
             call mpas_log_write('Cannot duplicate communicator')
       endif
       ! Initialize the Scotch graph data structure, and an extra one to hold the re-distributed graph
 #ifdef MPAS_USE_MPI_F08
-      call scotch_dgraphinit(scotchdgraph(1), localcomm% mpi_val)
-      call scotch_dgraphinit(scotchdgraph_redist(1), localcomm% mpi_val)
+      call scotch_dgraphinit(scotchdgraph, localcomm% mpi_val)
+      call scotch_dgraphinit(scotchdgraph_redist, localcomm% mpi_val)
 #else
-      call scotch_dgraphinit(scotchdgraph(1), localcomm)
-      call scotch_dgraphinit(scotchdgraph_redist(1), localcomm)
+      call scotch_dgraphinit(scotchdgraph, localcomm)
+      call scotch_dgraphinit(scotchdgraph_redist, localcomm)
 #endif
                  
       ! From Scotch documentation: edgelocsiz is lower-bounded by the minimum size 
@@ -452,39 +452,39 @@ module mpas_block_decomp
 
       ! Build the distributed Scotch graph and save it in scotchdgraph
       ! Note: Optional arguments veloloctab, vlblloctab, edgegsttab, and edloloctab are not needed here.
-      call scotch_dgraphbuild (scotchdgraph(1), &
+      call scotch_dgraphbuild (scotchdgraph, &
                         nLocVerticesGraph, & ! num of local vertices on the calling process
-                        vertloctab (1), & ! Array of start indices in edgeloctab for each local vertex
+                        vertloctab, & ! Array of start indices in edgeloctab for each local vertex
                         nLocEdgesGraph, & ! Number of local edges, including to ghost vertices
                         edgelocsiz, & ! Defined previously
-                        edgeloctab(1)) ! Holds the adjacency array for every local vertex
+                        edgeloctab) ! Holds the adjacency array for every local vertex
       
       ! Only needed during development/debugging. 
-      call scotch_dgraphcheck (scotchdgraph(1))
+      call scotch_dgraphcheck (scotchdgraph)
 
       ! Initialize the strategy data structure
-      call scotch_stratinit (stradat (1))
+      call scotch_stratinit (stradat)
       
       call mpas_timer_start('scotch_graph_partitioning')
       ! Partition the distributed graph and save the result in local_block_id_arr
       npart = dminfo % nProcs
-      call scotch_dgraphpart (scotchdgraph(1), npart, stradat (1), local_block_id_arr(1))
+      call scotch_dgraphpart (scotchdgraph, npart, stradat, local_block_id_arr)
       
       call mpas_timer_stop('scotch_graph_partitioning')
 
       ! After the paritioning above, each processor would not necessarily have information about all of the
       ! vertices it owns. To obtain this information, Scotch provides a convenience function to redistribute the graph
       ! to all processors, so that each processor has information about all of the vertices it owns.
-      call scotch_dgraphredist(scotchdgraph(1), & ! Input: original distributed graph
+      call scotch_dgraphredist(scotchdgraph, & ! Input: original distributed graph
                                  local_block_id_arr, & ! Input: the partition array
-                                 scotchdgraph_redist(1), & ! Output: re-distributed graph
+                                 scotchdgraph_redist, & ! Output: re-distributed graph
                                  num_local_vertices) ! Output: number of local vertices
       
       ! DO NOT REMOVE: This call is required if we want to read the local cell list directly after partitioning,
       ! instead of reading it from the output partition file.
       ! Extract the local cell list from the re-distributed graph.
       ! allocate(local_cell_list(num_local_vertices))
-      ! call scotch_dgraphdata(scotchdgraph_redist(1), local_cell_list)
+      ! call scotch_dgraphdata(scotchdgraph_redist, local_cell_list)
       ! do i=1,num_local_vertices
       !    call mpas_log_write('local_cell_list($i): $i',MPAS_LOG_ERR, intArgs=(/i,local_cell_list(i)/))
       ! end do
@@ -537,9 +537,9 @@ module mpas_block_decomp
       end if
 
       ! Clean up
-      call scotch_dgraphexit (scotchdgraph (1))
-      call scotch_dgraphexit (scotchdgraph_redist (1))
-      call scotch_stratexit (stradat (1))
+      call scotch_dgraphexit (scotchdgraph)
+      call scotch_dgraphexit (scotchdgraph_redist)
+      call scotch_stratexit (stradat)
 
       deallocate(edgeloctab)
       deallocate(vertloctab)
