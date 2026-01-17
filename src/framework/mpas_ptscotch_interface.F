@@ -33,7 +33,7 @@ contains
 
         implicit none
         ! Arguments
-        doubleprecision, target, intent(in) :: dgraph (SCOTCH_DGRAPHDIM)
+        doubleprecision, dimension(SCOTCH_DGRAPHDIM), target, intent(in) :: dgraph
         integer, intent(in) :: comm
 
         ! Return value
@@ -85,7 +85,7 @@ contains
 
         implicit none
 
-        doubleprecision, target, intent(in) :: dgraph (SCOTCH_DGRAPHDIM)
+        doubleprecision, dimension(SCOTCH_DGRAPHDIM), target, intent(in) :: dgraph
         integer(SCOTCH_NUMSIZE), intent(in) :: nVertices
         integer(SCOTCH_NUMSIZE), intent(in) :: vertloctab(nVertices+1)
         integer(SCOTCH_NUMSIZE), intent(in) :: nLocEdgesGraph
@@ -142,7 +142,7 @@ contains
 
         implicit none
 
-        doubleprecision, target, intent(in) :: dgraph (SCOTCH_DGRAPHDIM)
+        doubleprecision, dimension(SCOTCH_DGRAPHDIM), target, intent(in) :: dgraph
 
         ! Return value
         integer :: ierr
@@ -184,7 +184,7 @@ contains
 
         implicit none
 
-        doubleprecision, target, intent(in) :: dgraph (SCOTCH_DGRAPHDIM)
+        doubleprecision, dimension(SCOTCH_DGRAPHDIM), target, intent(in) :: dgraph
 
         interface
             subroutine scotchfdgraphexit(dgraph_ptr) bind(C, name='scotchm_dgraphexit')
@@ -297,9 +297,9 @@ contains
 
         implicit none
 
-        doubleprecision, target, intent(in) :: dgraph (SCOTCH_DGRAPHDIM)
+        doubleprecision, dimension(SCOTCH_DGRAPHDIM), target, intent(in) :: dgraph
         integer(SCOTCH_NUMSIZE), intent(in) :: num_part
-        doubleprecision, target, intent(in) :: stradat (scotch_stratdim)
+        doubleprecision, dimension(SCOTCH_STRATDIM), target, intent(in) :: stradat
         integer(SCOTCH_NUMSIZE), intent(out) :: parttab(*)
         
         ! Return value
@@ -350,9 +350,9 @@ contains
 
         implicit none
 
-        doubleprecision, target, intent(in) :: dgraph (SCOTCH_DGRAPHDIM)
+        doubleprecision, dimension(SCOTCH_DGRAPHDIM), target, intent(in) :: dgraph
         integer(SCOTCH_NUMSIZE), intent(in) :: parttab(*)
-        doubleprecision, target, intent(inout) :: dgraph_out (SCOTCH_DGRAPHDIM)
+        doubleprecision, dimension(SCOTCH_DGRAPHDIM), target, intent(inout) :: dgraph_out
         integer(SCOTCH_NUMSIZE) :: num_local_vertices
            
         ! Return value
@@ -399,7 +399,7 @@ contains
 
         implicit none
 
-        doubleprecision, target, intent(in) :: dgraph (SCOTCH_DGRAPHDIM)
+        doubleprecision, dimension(SCOTCH_DGRAPHDIM), target, intent(in) :: dgraph
         integer(SCOTCH_NUMSIZE), intent(out) :: local_cell_list(*)
 
         interface

@@ -380,9 +380,9 @@ module mpas_block_decomp
       integer :: nLocEdgesGraph = 0, nLocVerticesGraph = 0, edgelocsiz = 0, npart = 1
       character (len=StrKIND) :: partitionFilePrefix
       integer, dimension(:), allocatable :: edgeloctab, vertloctab
-      doubleprecision :: stradat (scotch_stratdim)
-      doubleprecision :: scotchdgraph (SCOTCH_DGRAPHDIM)
-      doubleprecision :: scotchdgraph_redist (SCOTCH_DGRAPHDIM)
+      doubleprecision, dimension(SCOTCH_STRATDIM) :: stradat
+      doubleprecision, dimension(SCOTCH_DGRAPHDIM) :: scotchdgraph
+      doubleprecision, dimension(SCOTCH_DGRAPHDIM) :: scotchdgraph_redist
       integer :: mpi_ierr
 #ifdef MPAS_USE_MPI_F08
       type (MPI_Comm) :: localcomm
