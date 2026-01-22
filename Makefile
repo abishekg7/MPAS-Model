@@ -1425,9 +1425,9 @@ musica_fortran_test:
 	$(eval MUSICA_FORTRAN_VERSION := $(shell pkg-config --modversion musica-fortran))
 	$(if $(findstring 1,$(MUSICA_FORTRAN_TEST)), $(info Built a simple test program with MUSICA-Fortran version $(MUSICA_FORTRAN_VERSION)), )
 
-scotch_fortran_test:
+scotch_c_test:
 	@#
-	@# Create C and Fortran test programs and try to build against the PT-SCOTCH library
+	@# Create a C test program and try to build against the PT-SCOTCH library
 	@#
 	$(info Checking for a working Scotch library...)
 	$(eval SCOTCH_C_TEST := $(shell $\
@@ -1455,29 +1455,6 @@ scotch_fortran_test:
 		Test program ptscotch_c_test.c and output ptscotch_c_test.log have been left $\
 	    in the top-level MPAS directory for further debugging ))
 	$(if $(findstring 1,$(SCOTCH_C_TEST)), $(info Built a simple C program with Scotch ))
-	$(eval SCOTCH_FORTRAN_TEST := $(shell $\
-		printf "program test_scotch_fortran\n$\
-		&   include \"ptscotchf.h\"\n$\
-    	&   doubleprecision :: scotchgraph (scotch_graphdim)\n$\
-		&   integer :: ierr\n$\
-		&   ierr = 0\n$\
-		&   call scotchfgraphinit(scotchgraph (1), ierr)\n$\
-		&   call scotchfgraphexit(scotchgraph(1))\n$\
-		end program test_scotch_fortran\n" | sed 's/&/ /' > ptscotch_f_test.f90; $\
-		$\
-		$(FC) $(SCOTCH_FCINCLUDES) $(SCOTCH_FFLAGS) ptscotch_f_test.f90 -o ptscotch_f_test.x $(SCOTCH_LIBS) > ptscotch_f_test.log 2>&1; $\
-		scotch_fortran_status=$$?; $\
-		if [ $$scotch_fortran_status -eq 0 ]; then $\
-			printf "1"; $\
-			rm -f ptscotch_f_test.f90 ptscotch_f_test.x ptscotch_f_test.log; $\
-		else $\
-			printf "0"; $\
-		fi $\
-	))
-	$(if $(findstring 0,$(SCOTCH_FORTRAN_TEST)), $(error Could not build a simple Fortran program with Scotch. $\
-		Test program ptscotch_f_test.f90 and output ptscotch_f_test.log have been left $\
-	    in the top-level MPAS directory for further debugging ))
-	$(if $(findstring 1,$(SCOTCH_FORTRAN_TEST)), $(info Built a simple Fortran program with Scotch ))
 
 pnetcdf_test:
 	@#
@@ -1536,7 +1513,7 @@ MUSICA_MESSAGE = "MPAS was not linked with the MUSICA-Fortran library."
 endif
 
 ifneq "$(SCOTCH_FFLAGS)" ""
-MAIN_DEPS += scotch_fortran_test
+MAIN_DEPS += scotch_c_test
 SCOTCH_MESSAGE = "MPAS has been linked with the Scotch graph partitioning library."
 else
 SCOTCH_MESSAGE = "MPAS was NOT linked with the Scotch graph partitioning library."
