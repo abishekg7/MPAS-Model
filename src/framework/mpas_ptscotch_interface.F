@@ -70,7 +70,7 @@ contains
     !>  Initializes a SCOTCH_Dgraph structure using a Fortran MPI communicator.
     !>  This subroutine wraps the C function scotchm_dgraphinit.
     !> \arguments
-    !>   dgraph - SCOTCH_Dgraph structure to be initialized
+    !>   dgraph - scotchm_dgraph structure to be initialized
     !>   comm   - Fortran MPI communicator integer
     !
     !-----------------------------------------------------------------------
@@ -81,8 +81,8 @@ contains
 
         implicit none
         ! Arguments
-        integer, intent(in) :: comm
         type(scotchm_dgraph), intent(inout) :: dgraph
+        integer, intent(in) :: comm
 
         ! Return value
         integer :: ierr
@@ -116,7 +116,7 @@ contains
     !>  Constructs a SCOTCH_Dgraph from local vertex and edge connectivity data.
     !>  This subroutine wraps the C function scotchm_dgraphbuild
     !> \arguments
-    !>   dgraph         - SCOTCH_Dgraph structure to be built
+    !>   dgraph         - scotchm_dgraph structure to be built
     !>   nVertices      - Number of local vertices
     !>   vertloctab     - Array of size (nVertices+1)
     !>                     giving the start index of edges for each local vertex
@@ -180,7 +180,7 @@ contains
     !>  Validates the internal structure of a SCOTCH_Dgraph for consistency.
     !>  This subroutine wraps the C function scotchm_dgraphcheck.
     !> \arguments
-    !>   dgraph - SCOTCH_Dgraph structure to be checked
+    !>   dgraph - scotchm_dgraph structure to be checked
     !
     !-----------------------------------------------------------------------
     subroutine scotch_dgraphcheck(dgraph)    
@@ -223,7 +223,7 @@ contains
     !>  Deallocates internal structures associated with a SCOTCH_Dgraph.
     !>  This subroutine wraps the C function scotchm_dgraphexit.
     !> \arguments
-    !>   dgraph - SCOTCH_Dgraph structure to be finalized
+    !>   dgraph - scotchm_dgraph structure to be finalized
     !
     !-----------------------------------------------------------------------
     subroutine scotch_dgraphexit(dgraph)        
@@ -256,7 +256,7 @@ contains
     !>  for distributed graph mapping. This subroutine wraps the C function
     !>  scotchm_stratinit.
     !> \arguments
-    !>   stradat - SCOTCH_Strat structure to be initialized
+    !>   stradat - scotchm_strat structure to be initialized
     !
     !-----------------------------------------------------------------------
     subroutine scotch_stratinit(stradat)
@@ -298,7 +298,7 @@ contains
     !>  Deallocates internal structures associated with a SCOTCH_Strat.
     !>  This subroutine wraps the C function scotchm_stratexit.
     !> \arguments
-    !>   stradat - SCOTCH_Strat structure to be finalized
+    !>   stradat - scotchm_strat structure to be finalized
     !
     !-----------------------------------------------------------------------
     subroutine scotch_stratexit(stradat)        
@@ -331,9 +331,9 @@ contains
     !>  provided SCOTCH strategy object. This subroutine wraps the C function
     !>  scotchm_dgraphpart.
     !> \arguments
-    !>   dgraph  - SCOTCH_Dgraph structure to be partitioned
+    !>   dgraph  - scotchm_dgraph structure to be partitioned
     !>   num_part - Number of partitions
-    !>   stradat - SCOTCH_Strat structure containing partitioning strategy
+    !>   stradat - scotchm_strat structure containing partitioning strategy
     !>   parttab - Output array of size equal to number of local vertices,
     !
     !-----------------------------------------------------------------------
@@ -383,10 +383,10 @@ contains
     !>  Redistributes the distributed graph structure based on a partition
     !>  table. This subroutine wraps the C function scotchm_dgraphredist.
     !> \arguments
-    !>   dgraph  - SCOTCH_Dgraph structure to be redistributed
+    !>   dgraph  - scotchm_dgraph structure to be redistributed
     !>   parttab - Input array of size equal to number of local vertices,
     !>             containing partition assignments
-    !>   dgraph_out - SCOTCH_Dgraph structure to hold redistributed graph
+    !>   dgraph_out - scotchm_dgraph structure to hold redistributed graph
     !>   num_local_vertices - Number of local vertices in the redistributed graph
     !
     !-----------------------------------------------------------------------
@@ -436,7 +436,7 @@ contains
     !>  Extracts vertex labels or stored IDs for local vertices into the
     !>  output array. This subroutine wraps the C function scotchm_dgraphdata.
     !> \arguments
-    !>   dgraph  - SCOTCH_Dgraph structure to extract from
+    !>   dgraph  - scotchm_dgraph structure to extract from
     !>   local_cell_list - Output array to hold vertex labels for local vertices
     !
     !-----------------------------------------------------------------------
