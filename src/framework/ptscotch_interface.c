@@ -16,6 +16,22 @@
 #include "ptscotch.h"
 
 
+/*********************************************************************************
+ *
+ * scotchm_get_intsize
+ *
+ * Get the size of SCOTCH_Num in bytes.
+ *
+ * Returns:
+ *   size of SCOTCH_Num in bytes.
+ *
+ ********************************************************************************/
+int scotchm_get_intsize()
+{
+	return sizeof(SCOTCH_Num);
+}
+
+
 /********************************************************************************
  *
  * scotchm_dgraphinit
@@ -23,23 +39,23 @@
  * Initialize a SCOTCH distributed graph object using a Fortran MPI communicator.
  *
  * Parameters:
- *   ptr        - pointer to a `SCOTCH_Dgraph` structure (as `void *`)
+ *   dgraph_ptr - pointer to a `SCOTCH_Dgraph` structure (as `void *`)
  *   localcomm  - Fortran MPI communicator handle (`MPI_Fint`) passed as `int`
  *
  * Returns:
  *   integer error code returned by `SCOTCH_dgraphInit` (0 on success).
  *
  ********************************************************************************/
-int scotchm_dgraphinit(void *ptr, int localcomm)
+int scotchm_dgraphinit(SCOTCH_Dgraph **dgraph_ptr, int localcomm)
 {
 	MPI_Comm comm;
 	int err;
 
 	comm = MPI_Comm_f2c((MPI_Fint)localcomm);
 
-	SCOTCH_Dgraph *dgraph = (SCOTCH_Dgraph *)ptr;
+	*dgraph_ptr = (SCOTCH_Dgraph *) malloc(sizeof (SCOTCH_Dgraph));
 
-	err = SCOTCH_dgraphInit(dgraph, comm);
+	err = SCOTCH_dgraphInit(*dgraph_ptr, comm);
 
 	return err;
 }
@@ -63,7 +79,7 @@ int scotchm_dgraphinit(void *ptr, int localcomm)
  *   integer error code returned by `SCOTCH_dgraphBuild` (0 on success).
  *
  ********************************************************************************/
-int scotchm_dgraphbuild(void *ptr,
+int scotchm_dgraphbuild(SCOTCH_Dgraph *dgraph_ptr,
 						SCOTCH_Num nVertices,
 						SCOTCH_Num *vertloctab_1,
 						SCOTCH_Num nLocEdgesGraph,
@@ -85,9 +101,7 @@ int scotchm_dgraphbuild(void *ptr,
 
 	int err;
 
-	SCOTCH_Dgraph *dgraph = (SCOTCH_Dgraph *)ptr;
-
-	err = SCOTCH_dgraphBuild(dgraph,
+	err = SCOTCH_dgraphBuild(dgraph_ptr,
 							 baseval,
 							 vertlocnbr,
 							 vertlocnbr,
@@ -118,9 +132,9 @@ int scotchm_dgraphbuild(void *ptr,
  *   integer error code returned by `SCOTCH_dgraphCheck` (0 on success).
  *
  ********************************************************************************/
-int scotchm_dgraphcheck(void *ptr)
+int scotchm_dgraphcheck(SCOTCH_Dgraph *dgraph_ptr)
 {
-	return SCOTCH_dgraphCheck((SCOTCH_Dgraph *)ptr);
+	return SCOTCH_dgraphCheck(dgraph_ptr);
 }
 
 
@@ -141,12 +155,9 @@ int scotchm_dgraphcheck(void *ptr)
  *   integer error code returned by `SCOTCH_dgraphPart` (0 on success).
  *
  ********************************************************************************/
-int scotchm_dgraphpart(void *ptr, SCOTCH_Num num_part, void *ptr_strat, SCOTCH_Num *parttab)
+int scotchm_dgraphpart(SCOTCH_Dgraph *dgraph_ptr, SCOTCH_Num num_part, SCOTCH_Strat *strat_ptr, SCOTCH_Num *parttab)
 {
-	SCOTCH_Dgraph *dgraph = (SCOTCH_Dgraph *)ptr;
-	SCOTCH_Strat *strat = (SCOTCH_Strat *)ptr_strat;
-
-	return SCOTCH_dgraphPart(dgraph, num_part, strat, parttab);
+	return SCOTCH_dgraphPart(dgraph_ptr, num_part, strat_ptr, parttab);
 }
 
 
@@ -166,10 +177,8 @@ int scotchm_dgraphpart(void *ptr, SCOTCH_Num num_part, void *ptr_strat, SCOTCH_N
  *   integer error code returned by `SCOTCH_dgraphRedist` (0 on success).
  *
  ********************************************************************************/
-int scotchm_dgraphredist(void *ptr, SCOTCH_Num *partloctab, void *ptr_out, SCOTCH_Num *vertlocnbr)
+int scotchm_dgraphredist(SCOTCH_Dgraph *dgraph_in, SCOTCH_Num *partloctab, SCOTCH_Dgraph *dgraph_out, SCOTCH_Num *vertlocnbr)
 {
-	SCOTCH_Dgraph *dgraph_in = (SCOTCH_Dgraph *)ptr;
-	SCOTCH_Dgraph *dgraph_out = (SCOTCH_Dgraph *)ptr_out;
 	SCOTCH_Num *permgsttab = NULL; /* Redistribution permutation array */
 	SCOTCH_Num vertlocdlt = 0;     /* Extra size of local vertex array */
 	SCOTCH_Num edgelocdlt = 0;     /* Extra size of local edge array */
@@ -182,6 +191,7 @@ int scotchm_dgraphredist(void *ptr, SCOTCH_Num *partloctab, void *ptr_out, SCOTC
 
 	return err;
 }
+
 
 /********************************************************************************
  *
@@ -197,17 +207,15 @@ int scotchm_dgraphredist(void *ptr, SCOTCH_Num *partloctab, void *ptr_out, SCOTC
  *   integer error code (currently returns the local `err` variable; 0 on success).
  *
  ********************************************************************************/
-void scotchm_dgraphdata(void *ptr, SCOTCH_Num *cell_list)
+void scotchm_dgraphdata(SCOTCH_Dgraph *dgraph_ptr, SCOTCH_Num *cell_list)
 {
 	
 	SCOTCH_Num vertlocnbr;	
 	SCOTCH_Num *vlblloctab; /* vertex labels */
 
-	SCOTCH_Dgraph *dgraph = (SCOTCH_Dgraph *)ptr;
-
-	SCOTCH_dgraphData(dgraph, NULL, NULL, &vertlocnbr, NULL, NULL, 
+	SCOTCH_dgraphData(dgraph_ptr, NULL, NULL, &vertlocnbr, NULL, NULL,
 		             NULL, NULL, NULL, &vlblloctab,
-					 NULL, NULL, NULL, 
+					 NULL, NULL, NULL,
 					 NULL, NULL, NULL, NULL);
 
 	// Copy vertex labels to output array
@@ -231,9 +239,9 @@ void scotchm_dgraphdata(void *ptr, SCOTCH_Num *cell_list)
  *   nothing (wraps `SCOTCH_dgraphExit`).
  *
  ********************************************************************************/
-void scotchm_dgraphexit(void *ptr)
+void scotchm_dgraphexit(SCOTCH_Dgraph *dgraph_ptr)
 {
-	SCOTCH_dgraphExit((SCOTCH_Dgraph *)ptr);
+	SCOTCH_dgraphExit(dgraph_ptr);
 }
 
 
@@ -251,12 +259,15 @@ void scotchm_dgraphexit(void *ptr)
  *   integer (0 on success).
  *
  ********************************************************************************/
-int scotchm_stratinit(void *strat_ptr)
+int scotchm_stratinit(SCOTCH_Strat **strat_ptr)
 {
-	SCOTCH_stratInit((SCOTCH_Strat *)strat_ptr);
-	
+
+	*strat_ptr = (SCOTCH_Strat *) malloc (sizeof (SCOTCH_Strat));
+
+	SCOTCH_stratInit(*strat_ptr);
+
 	// This was required to avoid crashes when scaling up to large core counts
-	SCOTCH_stratDgraphMapBuild((SCOTCH_Strat *)strat_ptr, SCOTCH_STRATSCALABILITY, 1, 0, 0.05);
+	SCOTCH_stratDgraphMapBuild(*strat_ptr, SCOTCH_STRATSCALABILITY, 1, 0, 0.05);
 
 	return 0;
 }
@@ -275,8 +286,8 @@ int scotchm_stratinit(void *strat_ptr)
  *   nothing (wraps `SCOTCH_stratExit`).
  *
  ********************************************************************************/
-void scotchm_stratexit(void *strat_ptr)
+void scotchm_stratexit(SCOTCH_Strat *strat_ptr)
 {
-	SCOTCH_stratExit((SCOTCH_Strat *)strat_ptr);
+	SCOTCH_stratExit(strat_ptr);
 }
 #endif
