@@ -6,13 +6,9 @@
  * distributed with this code, or at http://mpas-dev.github.com/license.html
  */
 #ifdef MPAS_SCOTCH
-#include <stddef.h>
 #include <stdlib.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <string.h>
 #include <stdio.h>
-#include <mpi.h>
+#include "mpi.h"
 #include "ptscotch.h"
 
 
