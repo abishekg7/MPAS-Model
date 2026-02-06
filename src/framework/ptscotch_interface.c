@@ -98,23 +98,11 @@ int scotchm_dgraphbuild(SCOTCH_Dgraph *dgraph_ptr,
 	SCOTCH_Num *vendloctab = vertloctab_1 + 1;
 	SCOTCH_Num *edgeloctab = (SCOTCH_Num *)adjncy;
 
-	int err;
-
-	err = SCOTCH_dgraphBuild(dgraph_ptr,
-							 baseval,
-							 vertlocnbr,
-							 vertlocnbr,
-							 vertloctab,
-							 vendloctab,
-							 veloloctab,
-							 vlblloctab,
-							 edgelocnbr,
-							 edgelocsiz,
-							 edgeloctab,
-							 edgegsttab,
+	return SCOTCH_dgraphBuild(dgraph_ptr, baseval, vertlocnbr, vertlocnbr,
+							 vertloctab, vendloctab, veloloctab, vlblloctab,
+							 edgelocnbr, edgelocsiz, edgeloctab, edgegsttab,
 							 edloloctab);
 
-	return err;
 }
 
 
