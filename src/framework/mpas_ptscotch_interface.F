@@ -11,13 +11,13 @@ module mpas_ptscotch_interface
 
     ! Dummy type declaration for SCOTCH distributed graph
     ! Member ptr is a pointer to the SCOTCH_Dgraph C structure
-    type, bind(c) :: scotchm_dgraph
+    type :: scotchm_dgraph
         type(c_ptr) :: ptr
     end type scotchm_dgraph
 
     ! Dummy type declaration for SCOTCH strategy
     ! Member ptr is a pointer to the SCOTCH_Strat C structure
-    type, bind(c) :: scotchm_strat
+    type :: scotchm_strat
         type(c_ptr) :: ptr
     end type scotchm_strat
 
@@ -39,10 +39,8 @@ contains
         use mpas_derived_types, only : MPAS_LOG_CRIT
 
         implicit none
-        ! Arguments
 
         integer(c_int) :: dummy_int
-        integer(c_size_t) :: dummy_size
 
         interface
             function scotchm_get_intsize() bind(C, name='scotchm_get_intsize') result(intsize)
@@ -52,8 +50,8 @@ contains
         end interface
 
        if (scotchm_get_intsize() /= c_sizeof(dummy_int)) then
-          call mpas_log_write("Error: Scotch SCOTCH_Num size does not match MPAS integer size \n &
-                                Please build Scotch with 32 bit integers", MPAS_LOG_CRIT)
+          call mpas_log_write("Error: Scotch SCOTCH_Num size does not match MPAS integer size \n" &
+                                // "Please build Scotch with 32-bit integers", MPAS_LOG_CRIT)
        else
           call mpas_log_write("Scotch SCOTCH_Num size is compatible with MPAS integer size")
        end if

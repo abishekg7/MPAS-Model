@@ -368,7 +368,7 @@ module mpas_block_decomp
       character (len=*), intent(out) :: blockFilename !< Output: Block decomposition file name
 
       integer, dimension(:), pointer :: global_start
-      integer, dimension(:), allocatable :: local_cell_list
+      !integer, dimension(:), allocatable :: local_cell_list ! May be needed to avoid reading from partition file
       integer, dimension(:), allocatable :: local_block_list
 
       integer, dimension(:), allocatable ::global_block_id_arr, local_block_id_arr
@@ -432,7 +432,7 @@ module mpas_block_decomp
       ! Duplicate the communicator to be used by Scotch
       call MPI_Comm_dup(dminfo % comm, localcomm, mpi_ierr)
       if (mpi_ierr /= 0) then
-            call mpas_log_write('Cannot duplicate communicator')
+         call mpas_log_write('Cannot duplicate communicator', MPAS_LOG_CRIT)
       endif
       ! Initialize the Scotch graph data structure, and an extra one to hold the re-distributed graph
 #ifdef MPAS_USE_MPI_F08
@@ -515,8 +515,8 @@ module mpas_block_decomp
       
       ! Compute the displacements for gathering all the local_block_id_arr to global_block_id_arr
       global_start(1) = 0
-         do i=2,dminfo % nprocs
-            global_start(i) = global_start(i-1) + local_nvertices(i-1)
+      do i=2,dminfo % nprocs
+         global_start(i) = global_start(i-1) + local_nvertices(i-1)
       end do
 
       ! Gather all the local block ids to global_block_id_arr so IO_NODE can write out the partitioning data
@@ -530,7 +530,7 @@ module mpas_block_decomp
          end if
          write(blockFilename,'(a,i0)') trim(partitionFilePrefix), dminfo % nProcs
          
-         call mpas_log_write('Writing out Scotch Graph paritioning data to '//trim(blockFilename))
+         call mpas_log_write('Writing out Scotch Graph partitioning data to '//trim(blockFilename))
          call mpas_new_unit(ounit)
          open(unit=ounit, file=trim(blockFilename), form='formatted', status='new', action="write", iostat=ostatus)
          do i=1,partial_global_graph_info % nVerticesTotal

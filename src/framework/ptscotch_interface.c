@@ -29,6 +29,7 @@
 size_t scotchm_get_intsize()
 {
 	return sizeof(SCOTCH_Num);
+
 }
 
 
@@ -49,15 +50,13 @@ size_t scotchm_get_intsize()
 int scotchm_dgraphinit(SCOTCH_Dgraph **dgraph_ptr, int localcomm)
 {
 	MPI_Comm comm;
-	int err;
 
 	comm = MPI_Comm_f2c((MPI_Fint)localcomm);
 
 	*dgraph_ptr = (SCOTCH_Dgraph *) malloc(sizeof (SCOTCH_Dgraph));
 
-	err = SCOTCH_dgraphInit(*dgraph_ptr, comm);
+	return SCOTCH_dgraphInit(*dgraph_ptr, comm);
 
-	return err;
 }
 
 
@@ -135,6 +134,7 @@ int scotchm_dgraphbuild(SCOTCH_Dgraph *dgraph_ptr,
 int scotchm_dgraphcheck(SCOTCH_Dgraph *dgraph_ptr)
 {
 	return SCOTCH_dgraphCheck(dgraph_ptr);
+
 }
 
 
@@ -158,6 +158,7 @@ int scotchm_dgraphcheck(SCOTCH_Dgraph *dgraph_ptr)
 int scotchm_dgraphpart(SCOTCH_Dgraph *dgraph_ptr, SCOTCH_Num num_part, SCOTCH_Strat *strat_ptr, SCOTCH_Num *parttab)
 {
 	return SCOTCH_dgraphPart(dgraph_ptr, num_part, strat_ptr, parttab);
+
 }
 
 
@@ -190,6 +191,7 @@ int scotchm_dgraphredist(SCOTCH_Dgraph *dgraph_in, SCOTCH_Num *partloctab, SCOTC
 	SCOTCH_dgraphSize(dgraph_out, NULL, vertlocnbr, NULL, NULL);
 
 	return err;
+
 }
 
 
@@ -243,6 +245,7 @@ void scotchm_dgraphexit(SCOTCH_Dgraph *dgraph_ptr)
 {
 	SCOTCH_dgraphExit(dgraph_ptr);
 	free(dgraph_ptr);
+
 }
 
 
@@ -271,6 +274,7 @@ int scotchm_stratinit(SCOTCH_Strat **strat_ptr)
 	SCOTCH_stratDgraphMapBuild(*strat_ptr, SCOTCH_STRATSCALABILITY, 1, 0, 0.05);
 
 	return 0;
+
 }
 
 
@@ -291,5 +295,6 @@ void scotchm_stratexit(SCOTCH_Strat *strat_ptr)
 {
 	SCOTCH_stratExit(strat_ptr);
 	free(strat_ptr);
+
 }
 #endif
