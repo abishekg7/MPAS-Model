@@ -74,12 +74,9 @@ int scotchm_dgraphinit(SCOTCH_Dgraph **dgraph_ptr, int localcomm)
  *   integer error code returned by `SCOTCH_dgraphBuild` (0 on success).
  *
  ********************************************************************************/
-int scotchm_dgraphbuild(SCOTCH_Dgraph *dgraph_ptr,
-						SCOTCH_Num nVertices,
-						SCOTCH_Num *vertloctab_1,
-						SCOTCH_Num nLocEdgesGraph,
-						SCOTCH_Num edgelocsiz_1,
-						SCOTCH_Num *adjncy)
+int scotchm_dgraphbuild(SCOTCH_Dgraph *dgraph_ptr, SCOTCH_Num nVertices, 
+                        SCOTCH_Num *vertloctab_1, SCOTCH_Num nLocEdgesGraph,
+                        SCOTCH_Num edgelocsiz_1, SCOTCH_Num *adjncy)
 {
 	SCOTCH_Num baseval = 1; /* Fortran-style 1-based indexing */
 	SCOTCH_Num vertlocnbr = nVertices;
@@ -95,9 +92,9 @@ int scotchm_dgraphbuild(SCOTCH_Dgraph *dgraph_ptr,
 	SCOTCH_Num *edgeloctab = (SCOTCH_Num *)adjncy;
 
 	return SCOTCH_dgraphBuild(dgraph_ptr, baseval, vertlocnbr, vertlocnbr,
-							 vertloctab, vendloctab, veloloctab, vlblloctab,
-							 edgelocnbr, edgelocsiz, edgeloctab, edgegsttab,
-							 edloloctab);
+	                          vertloctab, vendloctab, veloloctab, vlblloctab,
+	                          edgelocnbr, edgelocsiz, edgeloctab, edgegsttab,
+	                          edloloctab);
 
 }
 
@@ -195,14 +192,13 @@ int scotchm_dgraphredist(SCOTCH_Dgraph *dgraph_in, SCOTCH_Num *partloctab, SCOTC
  ********************************************************************************/
 void scotchm_dgraphdata(SCOTCH_Dgraph *dgraph_ptr, SCOTCH_Num *cell_list)
 {
-	
-	SCOTCH_Num vertlocnbr;	
+
+	SCOTCH_Num vertlocnbr;
 	SCOTCH_Num *vlblloctab; /* vertex labels */
 
 	SCOTCH_dgraphData(dgraph_ptr, NULL, NULL, &vertlocnbr, NULL, NULL,
-		             NULL, NULL, NULL, &vlblloctab,
-					 NULL, NULL, NULL,
-					 NULL, NULL, NULL, NULL);
+	                  NULL, NULL, NULL, &vlblloctab, NULL, NULL, NULL,
+	                  NULL, NULL, NULL, NULL);
 
 	// Copy vertex labels to output array
 	for (SCOTCH_Num i = 0; i < vertlocnbr; i++) {

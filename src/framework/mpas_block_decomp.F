@@ -131,8 +131,8 @@ module mpas_block_decomp
 #ifdef MPAS_SCOTCH
                useScotch = .true.
 #else
-              call mpas_log_write('Could not open block decomposition file for $i blocks.', MPAS_LOG_ERR, intArgs=(/dminfo % total_blocks/) )
-              call mpas_log_write('Filename: '//trim(filename), MPAS_LOG_CRIT)
+               call mpas_log_write('Could not open block decomposition file for $i blocks.', MPAS_LOG_ERR, intArgs=(/dminfo % total_blocks/) )
+               call mpas_log_write('Filename: '//trim(filename), MPAS_LOG_CRIT)
 #endif
             else
                useScotch = .false.
@@ -332,9 +332,6 @@ module mpas_block_decomp
 
    end subroutine mpas_block_decomp_cells_for_proc!}}}
 
-
-
-
 !***********************************************************************
 !
 !  routine mpas_block_decomp_scotch
@@ -368,7 +365,7 @@ module mpas_block_decomp
       character (len=*), intent(out) :: blockFilename !< Output: Block decomposition file name
 
       integer, dimension(:), pointer :: global_start
-      !integer, dimension(:), allocatable :: local_cell_list ! May be needed to avoid reading from partition file
+      ! integer, dimension(:), allocatable :: local_cell_list ! May be needed later to avoid reading partition file from disk
       integer, dimension(:), allocatable :: local_block_list
 
       integer, dimension(:), allocatable ::global_block_id_arr, local_block_id_arr
