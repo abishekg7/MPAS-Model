@@ -760,14 +760,13 @@ endif
 endif
 
 ifneq "$(SCOTCH)" ""
-	SCOTCH_FCINCLUDES += -I$(SCOTCH)/include
+	SCOTCH_INCLUDES += -I$(SCOTCH)/include
 	SCOTCH_LIBS += -L$(SCOTCH)/lib64 -lptscotch -lscotch  -lptscotcherr -lm
-	SCOTCH_FFLAGS = -DMPAS_SCOTCH
+	SCOTCH_FLAGS = -DMPAS_SCOTCH
 
-	FCINCLUDES += $(SCOTCH_FCINCLUDES)
-	CPPINCLUDES += $(SCOTCH_FCINCLUDES)
+	CPPINCLUDES += $(SCOTCH_INCLUDES)
 	LIBS += $(SCOTCH_LIBS)
-	override CPPFLAGS += $(SCOTCH_FFLAGS)
+	override CPPFLAGS += $(SCOTCH_FLAGS)
 endif
 
 ifneq "$(PNETCDF)" ""
