@@ -154,7 +154,6 @@ module mpas_block_decomp
 
             if (dminfo % my_proc_id == IO_NODE) then
                open(unit=iunit, file=trim(filename), form='formatted', status='old', iostat=istatus)
-               call mpas_log_write('After Scotch decomposition, attempting to read block decomposition file: '//trim(filename))
                if (istatus /= 0) then
                   call mpas_log_write('Could not open block decomposition file for $i blocks.', MPAS_LOG_ERR, intArgs=(/dminfo % total_blocks/) )
                   call mpas_log_write('Filename: '//trim(filename), MPAS_LOG_CRIT)
@@ -326,8 +325,6 @@ module mpas_block_decomp
         end if
       end if
 
-      call mpas_log_write('mpas_block_decomp_cells_for_proc successful ')
-
       call mpas_timer_stop('mpas_block_decomp_cells_for_proc')
 
    end subroutine mpas_block_decomp_cells_for_proc!}}}
@@ -448,9 +445,6 @@ module mpas_block_decomp
 
       nLocVerticesGraph = partial_global_graph_info % nVertices
 
-      call mpas_log_write('Before SCOTCH distributed graph build. nLocVertices =$i  nLocEdges= $i', &
-                           intArgs=(/nLocVerticesGraph, nLocEdgesGraph/))
-
       ! Build the distributed Scotch graph and save it in scotchdgraph
       ! Note: Optional arguments veloloctab, vlblloctab, edgegsttab, and edloloctab are not needed here.
       call scotch_dgraphbuild (scotchdgraph, &
@@ -489,7 +483,6 @@ module mpas_block_decomp
       ! do i=1,num_local_vertices
       !    call mpas_log_write('local_cell_list($i): $i',MPAS_LOG_ERR, intArgs=(/i,local_cell_list(i)/))
       ! end do
-
 
       allocate(local_block_list(num_local_vertices))
       
@@ -552,7 +545,6 @@ module mpas_block_decomp
 
       call MPI_Comm_free(localcomm, mpi_ierr)
       call mpas_timer_stop('scotch_total')
-      call mpas_log_write('Scotch partition successful')
 
    end subroutine mpas_block_decomp_scotch
 #endif

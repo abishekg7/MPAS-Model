@@ -49,12 +49,10 @@ contains
             end function scotchm_get_intsize
         end interface
 
-       if (scotchm_get_intsize() /= c_sizeof(dummy_int)) then
+        if (scotchm_get_intsize() /= c_sizeof(dummy_int)) then
           call mpas_log_write("Error: Scotch SCOTCH_Num size does not match MPAS integer size \n" &
                                 // "Please build Scotch with 32-bit integers", MPAS_LOG_CRIT)
-       else
-          call mpas_log_write("Scotch SCOTCH_Num size is compatible with MPAS integer size")
-       end if
+        end if
 
     end subroutine scotch_checkintsize
 
@@ -98,8 +96,6 @@ contains
 
         if (ierr /= 0) then
             call mpas_log_write('Error initalizing distributed Scotch graph', MPAS_LOG_CRIT)
-        else 
-            call mpas_log_write('Successfully initialized distributed Scotch graph')    
         end if
 
     end subroutine scotch_dgraphinit
@@ -158,11 +154,11 @@ contains
         ierr = 0
 
         ierr = scotchm_dgraphbuild(dgraph % ptr, nVertices, vertloctab,  &
-                                  nLocEdgesGraph, edgelocsiz, adjncy)
+                                   nLocEdgesGraph, edgelocsiz, adjncy)
 
         if (ierr /= 0) then
             call mpas_log_write('Error building distributed Scotch graph', MPAS_LOG_CRIT)
-        else 
+        else
             call mpas_log_write('Successfully built distributed Scotch graph')    
         end if
 
@@ -205,8 +201,6 @@ contains
 
         if (ierr /= 0) then
             call mpas_log_write('Error during distributed Scotch graph check', MPAS_LOG_CRIT)
-        else 
-            call mpas_log_write('Successfully checked distributed Scotch graph')    
         end if
 
     end subroutine scotch_dgraphcheck
@@ -280,8 +274,6 @@ contains
 
         if (ierr /= 0) then
             call mpas_log_write('Error during Scotch strategy initialization', MPAS_LOG_CRIT)
-        else 
-            call mpas_log_write('Successfully initialized Scotch strategy')
         end if
 
     end subroutine scotch_stratinit
@@ -418,8 +410,6 @@ contains
 
         if (ierr /= 0) then
             call mpas_log_write('Error during Scotch graph redistribution', MPAS_LOG_CRIT)
-        else 
-            call mpas_log_write('Successfully redistributed Scotch graph')
         end if
 
     end subroutine scotch_dgraphredist
