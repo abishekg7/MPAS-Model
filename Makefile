@@ -1511,7 +1511,7 @@ else
 MUSICA_MESSAGE = "MPAS was not linked with the MUSICA-Fortran library."
 endif
 
-ifneq "$(SCOTCH_FFLAGS)" ""
+ifneq "$(SCOTCH)" ""
 MAIN_DEPS += scotch_c_test
 SCOTCH_MESSAGE = "MPAS has been linked with the Scotch graph partitioning library."
 else
