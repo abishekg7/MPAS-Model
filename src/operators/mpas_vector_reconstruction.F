@@ -268,7 +268,6 @@ module mpas_vector_reconstruction
     call mpas_pool_get_config(meshPool, 'on_a_sphere', on_a_sphere)
 
     ! loop over cell centers
-    !$omp do schedule(runtime)
     !$acc parallel default(present) if(lACCLocal)
     !$acc loop gang
     do iCell = 1, nCells
@@ -298,12 +297,10 @@ module mpas_vector_reconstruction
       enddo
     enddo   ! iCell
     !$acc end parallel
-    !$omp end do
 
     call mpas_threading_barrier()
 
     if (on_a_sphere) then
-      !$omp do schedule(runtime)
       !$acc parallel default(present) if(lACCLocal)
       !$acc loop gang
       do iCell = 1, nCells
@@ -321,9 +318,7 @@ module mpas_vector_reconstruction
         end do
       end do
       !$acc end parallel
-      !$omp end do
     else
-      !$omp do schedule(runtime)
       !$acc parallel default(present) if(lACCLocal)
       !$acc loop gang vector collapse(2)
       do iCell = 1, nCells
@@ -333,7 +328,6 @@ module mpas_vector_reconstruction
         end do
       end do
       !$acc end parallel
-      !$omp end do
     end if
 
   end subroutine mpas_reconstruct_2d!}}}

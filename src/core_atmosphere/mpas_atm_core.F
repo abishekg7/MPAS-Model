@@ -404,8 +404,8 @@ module atm_core
       real (kind=RKIND), dimension(:), pointer :: dvEdge, invDvEdge
       real (kind=RKIND), dimension(:), pointer :: dcEdge, invDcEdge
       real (kind=RKIND), dimension(:), pointer :: areaTriangle, invAreaTriangle
-      integer, pointer :: nCells_ptr, nEdges_ptr, nVertices_ptr, nVertLevels_ptr, nEdgesSolve
-      integer :: nCells, nEdges, nVertices, nVertLevels
+      integer, pointer :: nCells_ptr, nCellsSolve_ptr, nEdges_ptr, nEdgesSolve_ptr, nVertices_ptr, nVerticesSolve_ptr, nVertLevels_ptr
+      integer :: nCells, nCellsSolve, nEdges, nEdgesSolve, nVertices, nVerticesSolve, nVertLevels
       integer :: thread
       character(len=StrKIND), pointer :: mminlu
 
@@ -449,12 +449,19 @@ module atm_core
       call mpas_pool_get_array(mesh, 'invAreaTriangle', invAreaTriangle)
       
       call mpas_pool_get_dimension(mesh, 'nCells', nCells_ptr)      
+      call mpas_pool_get_dimension(block % dimensions, 'nCellsSolve', nCellsSolve_ptr)
       call mpas_pool_get_dimension(mesh, 'nEdges', nEdges_ptr)
+      call mpas_pool_get_dimension(block % dimensions, 'nEdgesSolve', nEdgesSolve_ptr)
       call mpas_pool_get_dimension(mesh, 'nVertices', nVertices_ptr)
+      call mpas_pool_get_dimension(block % dimensions, 'nVerticesSolve', nVerticesSolve_ptr)
 
       nCells = nCells_ptr
       nEdges = nEdges_ptr
       nVertices = nVertices_ptr
+      nCellsSolve = nCellsSolve_ptr
+      nEdgesSolve = nEdgesSolve_ptr
+      nVerticesSolve = nVerticesSolve_ptr
+
  
       do iCell=1,nCells 
          invAreaCell(iCell) = 1.0_RKIND / areaCell(iCell)
@@ -517,24 +524,22 @@ module atm_core
       call mpas_pool_get_dimension(block % dimensions, 'edgeSolveThreadEnd', edgeSolveThreadEnd)
 
       call mpas_atm_pre_compute_solve_diagnostics(block)
-!$OMP PARALLEL DO
       do thread=1,nThreads
          if (.not. config_do_restart .or. (config_do_restart .and. config_do_DAcycling)) then
             call atm_init_coupled_diagnostics(state, 1, diag, mesh, block % configs, &
-                                              cellThreadStart(thread), cellThreadEnd(thread), &
-                                              vertexThreadStart(thread), vertexThreadEnd(thread), &
-                                              edgeThreadStart(thread), edgeThreadEnd(thread), &
-                                              cellSolveThreadStart(thread), cellSolveThreadEnd(thread), &
-                                              vertexSolveThreadStart(thread), vertexSolveThreadEnd(thread), &
-                                              edgeSolveThreadStart(thread), edgeSolveThreadEnd(thread))
+                                              1, nCells, &
+                                              1, nVertices, &
+                                              1, nEdges, &
+                                              1 ,nCellsSolve, &
+                                              1, nVerticesSolve, &
+                                              1, nEdgesSolve)
          end if
 
          call atm_compute_solve_diagnostics(dt, state, 1, diag, mesh, block % configs, &
-                                            cellThreadStart(thread), cellThreadEnd(thread), &
-                                            vertexThreadStart(thread), vertexThreadEnd(thread), &
-                                            edgeThreadStart(thread), edgeThreadEnd(thread))
+                                              1, nCells, &
+                                              1, nVertices, &
+                                              1, nEdges)
       end do
-!$OMP END PARALLEL DO
       call mpas_atm_post_compute_solve_diagnostics(block)
 
       deallocate(ke_vertex)
@@ -605,7 +610,6 @@ module atm_core
       !
       call mpas_atm_setup_bdy_masks(mesh, block % configs)
 
-      call mpas_pool_get_dimension(mesh, 'nEdgesSolve', nEdgesSolve)
       call mpas_pool_get_array(mesh, 'meshScalingDel2', meshScalingDel2)
       call mpas_pool_get_array(mesh, 'meshScalingDel4', meshScalingDel4)
 
