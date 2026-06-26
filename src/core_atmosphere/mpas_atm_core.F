@@ -524,7 +524,6 @@ module atm_core
       call mpas_pool_get_dimension(block % dimensions, 'edgeSolveThreadEnd', edgeSolveThreadEnd)
 
       call mpas_atm_pre_compute_solve_diagnostics(block)
-      do thread=1,nThreads
          if (.not. config_do_restart .or. (config_do_restart .and. config_do_DAcycling)) then
             call atm_init_coupled_diagnostics(state, 1, diag, mesh, block % configs, &
                                               1, nCells, &
@@ -539,7 +538,6 @@ module atm_core
                                               1, nCells, &
                                               1, nVertices, &
                                               1, nEdges)
-      end do
       call mpas_atm_post_compute_solve_diagnostics(block)
 
       deallocate(ke_vertex)
