@@ -2697,9 +2697,7 @@ module atm_time_integration
 #ifdef DO_PHYSICS
       MPAS_ACC_TIMER_START('atm_srk3: physics ACC_data_xfer')
       call mpas_pool_get_array(state, 'scalars', scalars_1, 1)
-      !$acc update self(scalars_1)
       call mpas_pool_get_array(state, 'scalars', scalars_2, 2)
-      !$acc update self(scalars_2)
       MPAS_ACC_TIMER_STOP('atm_srk3: physics ACC_data_xfer')
 
       if(config_convection_scheme == 'cu_grell_freitas' .or. &
@@ -2708,37 +2706,62 @@ module atm_time_integration
          MPAS_ACC_TIMER_START('atm_srk3: physics ACC_data_xfer')
          call mpas_pool_get_array(tend_physics, 'rqvdynten', rqvdynten)
          call mpas_pool_get_array(state, 'theta_m', theta_m, 2)
-         !$acc update self(theta_m)
 
          call mpas_pool_get_array(tend_physics, 'rthdynten', rthdynten)
-         !$acc update self(rthdynten)
          MPAS_ACC_TIMER_STOP('atm_srk3: physics ACC_data_xfer')
 
          !NOTE: The calculation of the tendency due to horizontal and vertical advection for the water vapor mixing ratio
          !requires that the subroutine atm_advance_scalars_mono was called on the third Runge Kutta step, so that a halo
          !update for the scalars at time_levs(1) is applied. A halo update for the scalars at time_levs(2) is done above. 
          if (config_monotonic) then
-            rqvdynten(:,:) = ( scalars_2(index_qv,:,:) - scalars_1(index_qv,:,:) ) / dt
+            !$acc parallel
+            !$acc loop gang vector collapse(2) 
+            do iCell = 1, nCellsSolve
+               do k = 1, nVertLevels
+                  rqvdynten(k,iCell) = ( scalars_2(index_qv,k,iCell) - scalars_1(index_qv,k,iCell) ) / dt
+               end do
+            end do
+            !$acc end parallel
          else
-            rqvdynten(:,:) = 0._RKIND
+            !$acc parallel
+            !$acc loop gang vector collapse(2) 
+            do iCell = 1, nCellsSolve
+               do k = 1, nVertLevels
+                  rqvdynten(k,iCell) = 0._RKIND
+                  end do
+            end do
+            !$acc end parallel
          end if
 
-         do k = 1, nVertLevels
-            do iCell = 1, nCellsSolve
+         !$acc parallel
+         !$acc loop gang vector collapse(2) 
+         do iCell = 1, nCellsSolve
+            do k = 1, nVertLevels
                fac_m = 1._RKIND/(1._RKIND + rv/rgas*scalars_2(index_qv,k,iCell))
                theta_local = theta_m(k,iCell)*fac_m
                rthdynten(k,iCell) = fac_m*(rthdynten(k,iCell)-theta_local*rv/rgas*rqvdynten(k,iCell))
             end do
          end do
+         !$acc end parallel
 
       end if
 
       !simply set to zero negative mixing ratios of different water species (for now):
-      where ( scalars_2(:,:,:) < 0.0)  &
-         scalars_2(:,:,:) = 0.0
+      !$acc parallel
+      !$acc loop gang vector collapse(2)
+      do iCell = 1, nCellsSolve
+         do k = 1, nVertLevels
+            do iScalar = 1, num_scalars
+               if (scalars_2(iScalar,k,iCell) < 0.0)  then
+                  scalars_2(iScalar,k,iCell) = 0.0
+               end if
+            end do
+         end do            
+      end do
+      !$acc end parallel
 
       MPAS_ACC_TIMER_START('atm_srk3: physics ACC_data_xfer')
-      !$acc update device(scalars_2, rthdynten)
+      !!$acc update self(rthdynten)
       MPAS_ACC_TIMER_STOP('atm_srk3: physics ACC_data_xfer')
       !call microphysics schemes:
       if (trim(config_microp_scheme) /= 'off')  then
