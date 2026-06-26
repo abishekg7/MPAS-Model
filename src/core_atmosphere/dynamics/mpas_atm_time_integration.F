@@ -2750,6 +2750,7 @@ module atm_time_integration
                                       cellSolveThreadStart(thread), cellSolveThreadEnd(thread))
         end do
 !$OMP END PARALLEL DO
+!$OMP BARRIER
         call mpas_timer_stop('microphysics')
         call post_microphysics( block % configs, state, diag, tend, 2)
       end if
@@ -3899,7 +3900,6 @@ module atm_time_integration
          !$acc end parallel
       end if
 
-!$OMP BARRIER
 
       !$acc parallel default(present)
       !$acc loop gang worker private(ts,rs)
@@ -4388,8 +4388,6 @@ module atm_time_integration
       ! we solved for these in the acoustic-step loop.
       ! we will compute ru and u here also, given we are here, even though we only need them on nEdgesSolve
 
-!$OMP BARRIER
-
       !$acc parallel default(present)
       !$acc loop gang worker
       do iEdge=edgeStart,edgeEnd
@@ -4406,8 +4404,6 @@ module atm_time_integration
          end do
       end do
       !$acc end parallel
-
-!$OMP BARRIER
 
       !$acc parallel default(present)
       !$acc loop gang worker
@@ -4771,7 +4767,6 @@ module atm_time_integration
       end do
       !$acc end parallel
 
-!$OMP BARRIER
 
       !
       ! scalar update, for each column sum fluxes over horizontal edges, add physics tendency,
@@ -5146,11 +5141,7 @@ module atm_time_integration
       !$acc update self(scalars_old) if (.not. config_gpu_aware_mpi)
       MPAS_ACC_TIMER_STOP('atm_advance_scalars_mono [ACC_data_xfer]')
 
-!$OMP BARRIER
-!$OMP MASTER
       call exchange_halo_group(block % domain, 'dynamics:'//trim(field_name)//'_old', config_gpu_aware_mpi)
-!$OMP END MASTER
-!$OMP BARRIER
 
       MPAS_ACC_TIMER_START('atm_advance_scalars_mono [ACC_data_xfer]')
       !$acc update device(scalars_old) if (.not. config_gpu_aware_mpi)
@@ -5201,7 +5192,6 @@ module atm_time_integration
 
          !$acc end parallel
 
-!$OMP BARRIER
 
       end if
 
@@ -5230,7 +5220,6 @@ module atm_time_integration
 
          !$acc end parallel
 
-!$OMP BARRIER
 
 #ifdef DEBUG_TRANSPORT
          !$acc update self(scalar_old)
@@ -5335,7 +5324,6 @@ module atm_time_integration
 
          !$acc end parallel
 
-!$OMP BARRIER
 
          !$acc parallel
 
@@ -5404,7 +5392,6 @@ module atm_time_integration
 
          !$acc end parallel
 
-!$OMP BARRIER
 
          !$acc parallel
 
@@ -5478,7 +5465,6 @@ module atm_time_integration
 
          !$acc end parallel
 
-!$OMP BARRIER
 
          !$acc parallel
 
@@ -5553,11 +5539,7 @@ module atm_time_integration
          !$acc update self(scale_arr) if (.not. config_gpu_aware_mpi)
          MPAS_ACC_TIMER_STOP('atm_advance_scalars_mono [ACC_data_xfer]')
 
-!$OMP BARRIER
-!$OMP MASTER
          call exchange_halo_group(block % domain, 'dynamics:scale', config_gpu_aware_mpi)
-!$OMP END MASTER
-!$OMP BARRIER
 
          MPAS_ACC_TIMER_START('atm_advance_scalars_mono [ACC_data_xfer]')
          !$acc update device(scale_arr) if (.not. config_gpu_aware_mpi)
@@ -5618,7 +5600,6 @@ module atm_time_integration
          ! rescale the vertical flux
          !
 
-!$OMP BARRIER
 
          !$acc parallel
  
@@ -5690,7 +5671,6 @@ module atm_time_integration
 
          ! the update should be positive definite. but roundoff can sometimes leave small negative values
          ! hence the enforcement of PD in the copy back to the model state.
-!$OMP BARRIER
 
          !$acc parallel
 
@@ -6399,7 +6379,6 @@ module atm_time_integration
 
       end if
 
-!$OMP BARRIER
 
       !
       ! Compute u (normal) velocity tendency for each edge (cell face)
@@ -6509,7 +6488,6 @@ module atm_time_integration
 
       if (rk_step == 1) then
 
-!$OMP BARRIER
 
          call  u_dissipation_3d( edgeStart, edgeEnd, edgeSolveStart, edgeSolveEnd, vertexStart, vertexEnd,    &
                                  cellStart, cellEnd, nCells, nEdges, nVertices, vertexDegree,                 &
@@ -6528,7 +6506,6 @@ module atm_time_integration
 
       end if ! (rk_step 1 test for computing mixing terms)
 
-!$OMP BARRIER
 
 !  add in mixing and physics tendency for u
 
@@ -7136,7 +7113,6 @@ module atm_time_integration
       !$acc end parallel
 
 
-!$OMP BARRIER
 
       !
       ! Compute kinetic energy in each cell (Ringler et al JCP 2009)
@@ -7194,7 +7170,6 @@ module atm_time_integration
          end do
          !$acc end parallel
 
-!$OMP BARRIER
 
          ! adjust ke at cell vertices - AG's new KE construction, part 2
          !
@@ -7281,7 +7256,6 @@ module atm_time_integration
       end do
       !$acc end parallel
 
-!$OMP BARRIER
 
       !
       ! Compute pv at the edges
@@ -7326,7 +7300,6 @@ module atm_time_integration
          !$acc end parallel
 
 
-!$OMP BARRIER
 
          !
          ! Modify PV edge with upstream bias. 
@@ -7477,7 +7450,6 @@ module atm_time_integration
       end do
       !$acc end parallel
 
-!$OMP BARRIER
 
       !$acc parallel default(present)
       !$acc loop gang
@@ -7491,7 +7463,6 @@ module atm_time_integration
       end do
       !$acc end parallel
 
-!$OMP BARRIER
 
       ! Compute rw (i.e. rho_zz * omega) from rho_zz, w, and ru.
       ! We are reversing the procedure we use in subroutine atm_recover_large_step_variables.
@@ -8322,7 +8293,6 @@ module atm_time_integration
       end do  ! updates now in temp storage
       !$acc end parallel
 
-!$OMP BARRIER
 
       !$acc parallel default(present)
       !$acc loop gang worker
