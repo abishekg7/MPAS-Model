@@ -14,8 +14,8 @@
 #else
 #define MPAS_ACC_TIMER_START(X)
 #define MPAS_ACC_TIMER_STOP(X)
-#define RHO_PP(i,j) rho_pp(i)
-#define RTHETA_PP(i,j) rtheta_pp(i)
+#define RHO_PP(i,j) rs(i)
+#define RTHETA_PP(i,j) ts(i)
 #endif
 
 module atm_time_integration
