@@ -9,9 +9,15 @@
 #ifdef MPAS_OPENACC
 #define MPAS_ACC_TIMER_START(X) call mpas_timer_start(X)
 #define MPAS_ACC_TIMER_STOP(X) call mpas_timer_stop(X)
+#define NEDGESONCELL_INNER_LOOP()  do i=1,nEdgesOnCell(iCell)
+#define NEDGESONCELL_OUTER_LOOP()
+#define ACC_LOOP_SEQ() !$acc loop seq
 #else
 #define MPAS_ACC_TIMER_START(X)
 #define MPAS_ACC_TIMER_STOP(X)
+#define NEDGESONCELL_OUTER_LOOP()  do i=1,nEdgesOnCell(iCell)
+#define NEDGESONCELL_INNER_LOOP()
+#define ACC_LOOP_SEQ()
 #endif
 
 module atm_time_integration
@@ -4871,20 +4877,23 @@ module atm_time_integration
             end do
             end do
 
-            !$acc loop seq
-            do i=1,nEdgesOnCell(iCell)
-               iEdge = edgesOnCell(i,iCell)
+
+            NEDGESONCELL_OUTER_LOOP()
+
+            !$acc loop vector collapse(2)
+            do k=1,nVertLevels
+            do iScalar=1,num_scalars
 
                ! here we add the horizontal flux divergence into the scalar tendency.
                ! note that the scalar tendency is modified.
-               !$acc loop vector collapse(2)
-               do k=1,nVertLevels
-                  do iScalar=1,num_scalars
+               ACC_LOOP_SEQ()
+               NEDGESONCELL_INNER_LOOP()
+                  iEdge = edgesOnCell(i,iCell)
                         scalar_tend_column(iScalar,k) = scalar_tend_column(iScalar,k) &
                                - edgesOnCell_sign(i,iCell) * uhAvg(k,iEdge)*horiz_flux_arr(iScalar,k,iEdge)
-                  end do
                end do
-
+            
+            end do
             end do
 
             !$acc loop vector collapse(2)
