@@ -12,12 +12,14 @@
 #define NEDGESONCELL_INNER_LOOP()  do i=1,nEdgesOnCell(iCell)
 #define NEDGESONCELL_OUTER_LOOP()
 #define ACC_LOOP_SEQ() !$acc loop seq
+#define SPLIT_K_ISCALAR_LOOP()
 #else
 #define MPAS_ACC_TIMER_START(X)
 #define MPAS_ACC_TIMER_STOP(X)
 #define NEDGESONCELL_OUTER_LOOP()  do i=1,nEdgesOnCell(iCell)
 #define NEDGESONCELL_INNER_LOOP()
 #define ACC_LOOP_SEQ()
+#define SPLIT_K_ISCALAR_LOOP()  end do; end do; do k=1,nVertLevels; do iScalar=1,num_scalars
 #endif
 
 module atm_time_integration
@@ -4732,6 +4734,7 @@ module atm_time_integration
       real (kind=RKIND) :: weight_time_old, weight_time_new
       real (kind=RKIND), dimension(num_scalars,nVertLevels) :: scalar_tend_column  ! local storage to accumulate tendency
       real (kind=RKIND) :: u_direction, u_positive, u_negative
+      real (kind=RKIND) :: scalar_tend_column_tmp
 
       flux4(q_im2, q_im1, q_i, q_ip1, ua) =                     &
           ua*( 7.*(q_i + q_im1) - (q_ip1 + q_im2) )/12.0
@@ -4866,6 +4869,28 @@ module atm_time_integration
       do iCell=cellSolveStart,cellSolveEnd
 
          if(bdyMaskCell(iCell) <= nRelaxZone) then  ! specified zone for regional_MPAS is not updated in this routine
+            !
+            !  vertical flux divergence and update of the scalars
+            !
+
+            !$acc loop vector
+            do iScalar=1,num_scalars
+               wdtn(iScalar,1) = 0.0
+               wdtn(iScalar,2) = wwAvg(2,iCell)*(fnm(2)*scalar_new(iScalar,2,iCell)+fnp(2)*scalar_new(iScalar,2-1,iCell))
+               wdtn(iScalar,nVertLevels) = wwAvg(nVertLevels,iCell) * &
+                                           ( fnm(nVertLevels)*scalar_new(iScalar,nVertLevels,iCell) &
+                                            +fnp(nVertLevels)*scalar_new(iScalar,nVertLevels-1,iCell) )
+               wdtn(iScalar,nVertLevels+1) = 0.0
+            end do
+
+            !$acc loop vector collapse(2)
+            do k=3,nVertLevels-1
+               do iScalar=1,num_scalars
+                  wdtn(iScalar,k) = flux3( scalar_new(iScalar,k-2,iCell),scalar_new(iScalar,k-1,iCell),  &
+                                           scalar_new(iScalar,k  ,iCell),scalar_new(iScalar,k+1,iCell),  &
+                                           wwAvg(k,iCell), coef_3rd_order )
+               end do
+            end do
 
             !$acc loop vector collapse(2)
             do k=1,nVertLevels
@@ -4893,44 +4918,13 @@ module atm_time_integration
                                - edgesOnCell_sign(i,iCell) * uhAvg(k,iEdge)*horiz_flux_arr(iScalar,k,iEdge)
                end do
             
-            end do
-            end do
-
-            !$acc loop vector collapse(2)
-            do k=1,nVertLevels
-               do iScalar=1,num_scalars
+               SPLIT_K_ISCALAR_LOOP()
+   
                      scalar_tend_column(iScalar,k) = scalar_tend_column(iScalar,k) * invAreaCell(iCell) &
                                                    + scalar_tend_save(iScalar,k,iCell)
-               end do
-            end do
+   
+               SPLIT_K_ISCALAR_LOOP()
 
-
-            !
-            !  vertical flux divergence and update of the scalars
-            !
-
-            !$acc loop vector
-            do iScalar=1,num_scalars
-               wdtn(iScalar,1) = 0.0
-               wdtn(iScalar,2) = wwAvg(2,iCell)*(fnm(2)*scalar_new(iScalar,2,iCell)+fnp(2)*scalar_new(iScalar,2-1,iCell))
-               wdtn(iScalar,nVertLevels) = wwAvg(nVertLevels,iCell) * &
-                                           ( fnm(nVertLevels)*scalar_new(iScalar,nVertLevels,iCell) &
-                                            +fnp(nVertLevels)*scalar_new(iScalar,nVertLevels-1,iCell) )
-               wdtn(iScalar,nVertLevels+1) = 0.0
-            end do
-
-            !$acc loop vector collapse(2)
-            do k=3,nVertLevels-1
-               do iScalar=1,num_scalars
-                  wdtn(iScalar,k) = flux3( scalar_new(iScalar,k-2,iCell),scalar_new(iScalar,k-1,iCell),  &
-                                           scalar_new(iScalar,k  ,iCell),scalar_new(iScalar,k+1,iCell),  &
-                                           wwAvg(k,iCell), coef_3rd_order )
-               end do
-            end do
-
-            !$acc loop vector collapse(2)
-            do k=1,nVertLevels
-               do iScalar=1,num_scalars
                   rho_zz_new_inv = 1.0_RKIND / (weight_time_old*rho_zz_old(k,iCell) + weight_time_new*rho_zz_new(k,iCell))
                   scalar_new(iScalar,k,iCell) = (   scalar_old(iScalar,k,iCell)*rho_zz_old(k,iCell) &
                         + dt*( scalar_tend_column(iScalar,k) -rdnw(k)*(wdtn(iScalar,k+1)-wdtn(iScalar,k)) ) ) * rho_zz_new_inv
