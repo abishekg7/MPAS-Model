@@ -13,6 +13,7 @@
 #define NEDGESONCELL_OUTER_LOOP()
 #define ACC_LOOP_SEQ() !$acc loop seq
 #define SPLIT_K_ISCALAR_LOOP()
+#define SCALAR_TEND_COLUMN(iScalar,k) scalar_tend_column_tmp
 #else
 #define MPAS_ACC_TIMER_START(X)
 #define MPAS_ACC_TIMER_STOP(X)
@@ -20,6 +21,7 @@
 #define NEDGESONCELL_INNER_LOOP()
 #define ACC_LOOP_SEQ()
 #define SPLIT_K_ISCALAR_LOOP()  end do; end do; do k=1,nVertLevels; do iScalar=1,num_scalars
+#define SCALAR_TEND_COLUMN(iScalar,k) scalar_tend_column(iScalar,k)
 #endif
 
 module atm_time_integration
@@ -4859,13 +4861,9 @@ module atm_time_integration
       ! and add vertical flux divergence in update.
       !
 
-      MPAS_ACC_TIMER_START('atm_advance_scalars [ACC_data_xfer]')
-      !$acc enter data create(scalar_tend_column)
-      MPAS_ACC_TIMER_STOP('atm_advance_scalars [ACC_data_xfer]')
-
       call mpas_timer_start('atm_advance_scalars_4857')
       !$acc parallel wait
-      !$acc loop gang worker private(scalar_tend_column, wdtn)
+      !$acc loop gang worker private(wdtn)
       do iCell=cellSolveStart,cellSolveEnd
 
          if(bdyMaskCell(iCell) <= nRelaxZone) then  ! specified zone for regional_MPAS is not updated in this routine
@@ -4895,7 +4893,7 @@ module atm_time_integration
             !$acc loop vector collapse(2)
             do k=1,nVertLevels
             do iScalar=1,num_scalars
-               scalar_tend_column(iScalar,k) = 0.0_RKIND
+               SCALAR_TEND_COLUMN(iScalar,k) = 0.0_RKIND
 #ifndef DO_PHYSICS
                scalar_tend_save(iScalar,k,iCell) = 0.0_RKIND  !  testing purposes - we have no sources or sinks
 #endif
@@ -4914,20 +4912,20 @@ module atm_time_integration
                ACC_LOOP_SEQ()
                NEDGESONCELL_INNER_LOOP()
                   iEdge = edgesOnCell(i,iCell)
-                        scalar_tend_column(iScalar,k) = scalar_tend_column(iScalar,k) &
+                        SCALAR_TEND_COLUMN(iScalar,k) = SCALAR_TEND_COLUMN(iScalar,k) &
                                - edgesOnCell_sign(i,iCell) * uhAvg(k,iEdge)*horiz_flux_arr(iScalar,k,iEdge)
                end do
             
                SPLIT_K_ISCALAR_LOOP()
    
-                     scalar_tend_column(iScalar,k) = scalar_tend_column(iScalar,k) * invAreaCell(iCell) &
+                     SCALAR_TEND_COLUMN(iScalar,k) = SCALAR_TEND_COLUMN(iScalar,k) * invAreaCell(iCell) &
                                                    + scalar_tend_save(iScalar,k,iCell)
    
                SPLIT_K_ISCALAR_LOOP()
 
                   rho_zz_new_inv = 1.0_RKIND / (weight_time_old*rho_zz_old(k,iCell) + weight_time_new*rho_zz_new(k,iCell))
                   scalar_new(iScalar,k,iCell) = (   scalar_old(iScalar,k,iCell)*rho_zz_old(k,iCell) &
-                        + dt*( scalar_tend_column(iScalar,k) -rdnw(k)*(wdtn(iScalar,k+1)-wdtn(iScalar,k)) ) ) * rho_zz_new_inv
+                        + dt*( SCALAR_TEND_COLUMN(iScalar,k) -rdnw(k)*(wdtn(iScalar,k+1)-wdtn(iScalar,k)) ) ) * rho_zz_new_inv
                end do
             end do
 
@@ -4937,10 +4935,6 @@ module atm_time_integration
       !$acc end parallel
 
       call mpas_timer_stop('atm_advance_scalars_4857')
-
-      MPAS_ACC_TIMER_START('atm_advance_scalars [ACC_data_xfer]')
-      !$acc exit data delete(scalar_tend_column)
-      MPAS_ACC_TIMER_STOP('atm_advance_scalars [ACC_data_xfer]')
 
    end subroutine atm_advance_scalars_work
 
