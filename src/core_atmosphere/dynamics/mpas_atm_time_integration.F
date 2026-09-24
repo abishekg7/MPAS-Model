@@ -14,6 +14,7 @@
 #define ACC_LOOP_SEQ() !$acc loop seq
 #define SPLIT_K_ISCALAR_LOOP()
 #define SCALAR_TEND_COLUMN(iScalar,k) scalar_tend_column_tmp
+#define ZERO_SCALAR_TEND_COLUMN() scalar_tend_column_tmp = 0.0_RKIND
 #else
 #define MPAS_ACC_TIMER_START(X)
 #define MPAS_ACC_TIMER_STOP(X)
@@ -22,6 +23,7 @@
 #define ACC_LOOP_SEQ()
 #define SPLIT_K_ISCALAR_LOOP()  end do; end do; do k=1,nVertLevels; do iScalar=1,num_scalars
 #define SCALAR_TEND_COLUMN(iScalar,k) scalar_tend_column(iScalar,k)
+#define ZERO_SCALAR_TEND_COLUMN()
 #endif
 
 module atm_time_integration
@@ -4890,15 +4892,13 @@ module atm_time_integration
                end do
             end do
 
-            !$acc loop vector collapse(2)
+#ifndef MPAS_OPENACC
             do k=1,nVertLevels
             do iScalar=1,num_scalars
                SCALAR_TEND_COLUMN(iScalar,k) = 0.0_RKIND
-#ifndef DO_PHYSICS
-               scalar_tend_save(iScalar,k,iCell) = 0.0_RKIND  !  testing purposes - we have no sources or sinks
+            end do
+            end do
 #endif
-            end do
-            end do
 
 
             NEDGESONCELL_OUTER_LOOP()
@@ -4907,6 +4907,7 @@ module atm_time_integration
             do k=1,nVertLevels
             do iScalar=1,num_scalars
 
+               ZERO_SCALAR_TEND_COLUMN()
                ! here we add the horizontal flux divergence into the scalar tendency.
                ! note that the scalar tendency is modified.
                ACC_LOOP_SEQ()
@@ -4917,8 +4918,10 @@ module atm_time_integration
                end do
             
                SPLIT_K_ISCALAR_LOOP()
-   
-                     SCALAR_TEND_COLUMN(iScalar,k) = SCALAR_TEND_COLUMN(iScalar,k) * invAreaCell(iCell) &
+#ifndef DO_PHYSICS
+               scalar_tend_save(iScalar,k,iCell) = 0.0_RKIND  !  testing purposes - we have no sources or sinks
+#endif   
+               SCALAR_TEND_COLUMN(iScalar,k) = SCALAR_TEND_COLUMN(iScalar,k) * invAreaCell(iCell) &
                                                    + scalar_tend_save(iScalar,k,iCell)
    
                SPLIT_K_ISCALAR_LOOP()
