@@ -443,6 +443,7 @@ module mpas_stream_manager
            call mpas_pool_clone_pool(manager % defaultAtts, new_stream % att_pool)
            call mpas_pool_create_pool(new_stream % field_pool)
            call mpas_pool_create_pool(new_stream % field_pkg_pool)
+           call mpas_pool_create_pool(new_stream % field_cons_pool)
            call mpas_pool_create_pool(new_stream % pkg_pool)
            nullify(new_stream % next)
 
@@ -651,6 +652,7 @@ module mpas_stream_manager
            call mpas_pool_destroy_pool(stream % att_pool)
            call mpas_pool_destroy_pool(stream % field_pool)
            call mpas_pool_destroy_pool(stream % field_pkg_pool)
+           call mpas_pool_destroy_pool(stream % field_cons_pool)
            call mpas_pool_destroy_pool(stream % pkg_pool)
            if (associated(stream % referenceTime)) then
                deallocate(stream % referenceTime)
@@ -879,6 +881,7 @@ module mpas_stream_manager
         integer :: err_level
         integer :: err_local, threadNum
         character (len=StrKIND) :: localFieldName
+        character (len=StrKIND) :: field_cons
         integer :: colon
 
         threadNum = mpas_threading_get_thread_num()
@@ -913,7 +916,7 @@ module mpas_stream_manager
            !
            colon = index(fieldName, ':')
            if (colon > 0) then
-               localFieldName = fieldName(1:colon-1)               
+               localFieldName = fieldName(1:colon-1)
            else
                localFieldName = fieldName
            end if
@@ -951,23 +954,28 @@ module mpas_stream_manager
            end if
 
            !
+           ! Validate the constituent list, if any, before modifying the stream
+           !
+           if (colon > 0) then
+               call stream_mgr_check_constituents(manager, trim(localFieldName), fieldName(colon+1:), err_local)
+               if (err_local /= MPAS_STREAM_MGR_NOERR) then
+                   if (present(ierr)) ierr = MPAS_STREAM_MGR_ERROR
+                   return
+               end if
+           end if
+
+           !
            ! Add field to field pool in stream if the field is activated
            !
            if (info % isActive) then
                call mpas_pool_add_config(stream % field_pool, trim(localFieldName), 1)
-               if ( colon > 0 .and. info % nDims == 3 .and. info % fieldType == MPAS_POOL_REAL ) then
-                    call stream_mgr_check_constituents(manager, trim(localFieldName), fieldName(colon+1:), err_local)
-                    if (err_local /= MPAS_STREAM_MGR_NOERR) then
-                    if (present(ierr)) ierr = MPAS_STREAM_MGR_ERROR
-                    return
-                    end if
-                    !     STREAM_ERROR_WRITE('Requested field '//trim(varArrayName)//' is not a var_array')
-                    !     ierr = MPAS_STREAM_MGR_ERROR
-                    !     return
+
+               if (colon > 0) then
+                  STREAM_DEBUG_WRITE('-- Selecting constituents '//trim(fieldName(colon+1:))//' of field '//trim(localFieldName)//' in stream '//trim(streamID))
+                  write(field_cons,'(a)') trim(localFieldName)//':constituents'
+                  call mpas_pool_add_config(stream % field_cons_pool, field_cons, fieldName(colon+1:))
                end if
 
-               
-               
                if (present(packages)) then
                   STREAM_DEBUG_WRITE('-- Attaching packages '//trim(packages)//' to field '//trim(localFieldName)//' in stream '//trim(streamID))
                   write(field_pkg,'(a)') trim(localFieldName)//':packages'
@@ -1037,82 +1045,65 @@ module mpas_stream_manager
         integer, intent(out) :: ierr
 
         type (mpas_pool_field_info_type) :: info
-        character (len=StrKIND), dimension(:), pointer :: constituentNames
-        character (len=StrKIND) :: constituentName
-        logical :: isVarArray
-        logical :: found
-        integer :: err_local
-        integer :: i, first, comma
-
-        type (field1DReal), pointer :: real1d
-        type (field2DReal), pointer :: real2d
         type (field3DReal), pointer :: real3d
-        type (field4DReal), pointer :: real4d
-        type (field5DReal), pointer :: real5d
-        type (field1DInteger), pointer :: int1d
-        type (field2DInteger), pointer :: int2d
-        type (field3DInteger), pointer :: int3d
+        logical, dimension(:), allocatable :: isActive
 
 
         ierr = MPAS_STREAM_MGR_NOERR
 
-        nullify(constituentNames)
+        call stream_mgr_check_field_exists(manager, varArrayName, info, ierr)
+        if (ierr /= MPAS_STREAM_MGR_NOERR) return
 
-        ! select case (info % fieldType)
-        !     case (MPAS_POOL_REAL)
-        !         select case (info % nDims)
-        !             case (1)
-        !                 call mpas_pool_get_field(manager % allFields, varArrayName, real1d, 1)
-        !                 isVarArray = real1d % isVarArray
-        !                 constituentNames => real1d % constituentNames
-        !             case (2)
-        !                 call mpas_pool_get_field(manager % allFields, varArrayName, real2d, 1)
-        !                 isVarArray = real2d % isVarArray
-        !                 constituentNames => real2d % constituentNames
-        !             case (3)
-        !                 call mpas_pool_get_field(manager % allFields, varArrayName, real3d, 1)
-        !                 isVarArray = real3d % isVarArray
-        !                 constituentNames => real3d % constituentNames
-        !             case (4)
-        !                 call mpas_pool_get_field(manager % allFields, varArrayName, real4d, 1)
-        !                 isVarArray = real4d % isVarArray
-        !                 constituentNames => real4d % constituentNames
-        !             case (5)
-        !                 call mpas_pool_get_field(manager % allFields, varArrayName, real5d, 1)
-        !                 isVarArray = real5d % isVarArray
-        !                 constituentNames => real5d % constituentNames
-        !         end select
-        !     case (MPAS_POOL_INTEGER)
-        !         select case (info % nDims)
-        !             case (1)
-        !                 call mpas_pool_get_field(manager % allFields, varArrayName, int1d, 1)
-        !                 isVarArray = int1d % isVarArray
-        !                 constituentNames => int1d % constituentNames
-        !             case (2)
-        !                 call mpas_pool_get_field(manager % allFields, varArrayName, int2d, 1)
-        !                 isVarArray = int2d % isVarArray
-        !                 constituentNames => int2d % constituentNames
-        !             case (3)
-        !                 call mpas_pool_get_field(manager % allFields, varArrayName, int3d, 1)
-        !                 isVarArray = int3d % isVarArray
-        !                 constituentNames => int3d % constituentNames
-        !         end select
-        ! end select
+        if (info % fieldType /= MPAS_POOL_REAL .or. info % nDims /= 3) then
+            STREAM_ERROR_WRITE('Constituent lists are only supported for 3-d real var_arrays; '//trim(varArrayName)//' is not one')
+            ierr = MPAS_STREAM_MGR_ERROR
+            return
+        end if
 
         call mpas_pool_get_field(manager % allFields, varArrayName, real3d, 1)
-        isVarArray = real3d % isVarArray
-        constituentNames => real3d % constituentNames
-
-        if ( .not. isVarArray .or. .not. associated(constituentNames)) then
+        if (.not. real3d % isVarArray .or. .not. associated(real3d % constituentNames)) then
             STREAM_ERROR_WRITE('Requested field '//trim(varArrayName)//' is not a var_array')
             ierr = MPAS_STREAM_MGR_ERROR
             return
         end if
 
-        real3d % isConstituentActive(:) = .false.
-        !
-        ! Check each name in the comma-separated list of constituents
-        !
+        allocate(isActive(size(real3d % constituentNames)))
+        call parse_constituent_list(varArrayName, real3d % constituentNames, constituentList, isActive, ierr)
+        deallocate(isActive)
+
+    end subroutine stream_mgr_check_constituents!}}}
+
+
+    !-----------------------------------------------------------------------
+    !  routine parse_constituent_list
+    !
+    !> \brief Converts a comma-separated constituent list to a mask.
+    !> \details
+    !>  Sets isActive(i) to .true. for each entry of constituentNames that
+    !>  appears in the comma-separated list constituentList (e.g., 'qv,qc'),
+    !>  and to .false. otherwise. Empty entries in the list are ignored.
+    !>  An error is written and ierr is set to MPAS_STREAM_MGR_ERROR if a
+    !>  name in the list is not a constituent of the var_array.
+    !
+    !-----------------------------------------------------------------------
+    subroutine parse_constituent_list(varArrayName, constituentNames, constituentList, isActive, ierr)!{{{
+
+        implicit none
+
+        character (len=*), intent(in) :: varArrayName
+        character (len=StrKIND), dimension(:), intent(in) :: constituentNames
+        character (len=*), intent(in) :: constituentList
+        logical, dimension(:), intent(out) :: isActive
+        integer, intent(out) :: ierr
+
+        character (len=StrKIND) :: constituentName
+        logical :: found
+        integer :: i, first, comma
+
+
+        ierr = MPAS_STREAM_MGR_NOERR
+        isActive(:) = .false.
+
         first = 1
         do while (first <= len_trim(constituentList))
             comma = index(constituentList(first:), ',')
@@ -1126,24 +1117,22 @@ module mpas_stream_manager
 
             if (len_trim(constituentName) == 0) cycle
 
-            STREAM_WARNING_WRITE('-- Checking constituent '//trim(constituentName)//' of var_array '//trim(varArrayName))
-
             found = .false.
             do i=1,size(constituentNames)
                 if (trim(constituentNames(i)) == trim(constituentName)) then
                     found = .true.
-                    real3d % isConstituentActive(i) = .true.
+                    isActive(i) = .true.
                 end if
             end do
 
             if (.not. found) then
                 STREAM_ERROR_WRITE('Requested field '//trim(constituentName)//' is not a constituent of var_array '//trim(varArrayName))
                 ierr = MPAS_STREAM_MGR_ERROR
-                exit
+                return
             end if
         end do
 
-    end subroutine stream_mgr_check_constituents!}}}
+    end subroutine parse_constituent_list!}}}
 
 
     !-----------------------------------------------------------------------
@@ -1176,6 +1165,7 @@ module mpas_stream_manager
         type (mpas_pool_field_info_type) :: info
         type (mpas_pool_iterator_type) :: itr
         character (len=StrKIND) :: field_pkg
+        character (len=StrKIND), pointer :: constituents
         integer, pointer :: test_ptr
         logical :: test_logical
         integer :: err_level
@@ -1261,6 +1251,12 @@ module mpas_stream_manager
                        if ( info % isActive ) then
                            call mpas_pool_add_config(stream % field_pool, itr % memberName, 1)
 
+                           nullify(constituents)
+                           call mpas_pool_get_config(refStream % field_cons_pool, trim(itr % memberName)//':constituents', constituents)
+                           if (associated(constituents)) then
+                              call mpas_pool_add_config(stream % field_cons_pool, trim(itr % memberName)//':constituents', constituents)
+                           end if
+
                            if (present(packages)) then
                               STREAM_DEBUG_WRITE('-- Attaching packages '//trim(packages)//' to field '//trim(itr % memberName)//' in stream '//trim(streamID))
                               write(field_pkg,'(a)') trim(itr % memberName)//':packages'
@@ -1304,6 +1300,8 @@ module mpas_stream_manager
 
         type (MPAS_stream_list_type), pointer :: stream
         integer, pointer :: test_ptr
+        character (len=StrKIND), pointer :: constituents
+        integer :: err_level
         integer :: err_local, threadNum
 
         threadNum = mpas_threading_get_thread_num()
@@ -1347,6 +1345,15 @@ module mpas_stream_manager
         !
         if ( threadNum == 0 ) then
            call mpas_pool_remove_config(stream % field_pool, fieldName)
+
+           err_level = mpas_pool_get_error_level()
+           call mpas_pool_set_error_level(MPAS_POOL_SILENT)
+           nullify(constituents)
+           call mpas_pool_get_config(stream % field_cons_pool, trim(fieldName)//':constituents', constituents)
+           if (associated(constituents)) then
+              call mpas_pool_remove_config(stream % field_cons_pool, trim(fieldName)//':constituents')
+           end if
+           call mpas_pool_set_error_level(err_level)
         end if
 
     end subroutine MPAS_stream_mgr_remove_field!}}}
@@ -4481,6 +4488,8 @@ module mpas_stream_manager
         character(kind=c_char), dimension(idLength+1) :: c_file_id
 
         character (len=StrKIND), pointer :: packages
+        character (len=StrKIND), pointer :: constituents
+        logical, dimension(:), allocatable :: isActive
         logical :: active_field
         integer :: err_level
 
@@ -4582,7 +4591,21 @@ module mpas_stream_manager
                                 call MPAS_streamAddField(stream % stream, real2d)
                             case (3)
                                 call mpas_pool_get_field(allFields, itr % memberName, real3d, timeLevel)
-                                call MPAS_streamAddField(stream % stream, real3d)
+
+                                nullify(constituents)
+                                call mpas_pool_set_error_level(MPAS_POOL_SILENT)
+                                call mpas_pool_get_config(stream % field_cons_pool, trim(itr % memberName)//':constituents', constituents)
+                                call mpas_pool_set_error_level(err_level)
+
+                                if (associated(constituents)) then
+                                    allocate(isActive(size(real3d % constituentNames)))
+                                    call parse_constituent_list(itr % memberName, real3d % constituentNames, constituents, &
+                                                                isActive, local_ierr)
+                                    call MPAS_streamAddField(stream % stream, real3d, activeConstituents=isActive)
+                                    deallocate(isActive)
+                                else
+                                    call MPAS_streamAddField(stream % stream, real3d)
+                                end if
                             case (4)
                                 call mpas_pool_get_field(allFields, itr % memberName, real4d, timeLevel)
                                 call MPAS_streamAddField(stream % stream, real4d)

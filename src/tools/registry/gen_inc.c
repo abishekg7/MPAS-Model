@@ -1490,7 +1490,6 @@ int parse_var_array(FILE *fd, ezxml_t registry, ezxml_t superStruct, ezxml_t var
 		}
 		fortprintf(fd, "! Defining time level %d\n", time_lev);
 		fortprintf(fd, "      allocate( %s %% constituentNames(numConstituents) )\n", pointer_name_arr);
-		fortprintf(fd, "      allocate( %s %% isConstituentActive(numConstituents) )\n", pointer_name_arr);
 		fortprintf(fd, "      %s %% fieldName = '%s'\n", pointer_name_arr , vararrname);
 		if (decomp != -1) {
 			fortprintf(fd, "      %s %% isDecomposed = .true.\n", pointer_name_arr);
@@ -1526,7 +1525,6 @@ int parse_var_array(FILE *fd, ezxml_t registry, ezxml_t superStruct, ezxml_t var
 			fortprintf(fd, "      end if\n");
 			fortprintf(fd, "      if (const_index > 0) then\n", spacing);
 			fortprintf(fd, "         %s %% constituentNames(const_index) = '%s'\n", pointer_name_arr, varname);
-			fortprintf(fd, "         %s %% isConstituentActive(const_index) = .true.\n", pointer_name_arr);
 			fortprintf(fd, "      end if\n", spacing);
 		}
 

@@ -1111,13 +1111,14 @@ module mpas_io_streams
    end subroutine MPAS_streamAddField_2dReal
 
 
-   subroutine MPAS_streamAddField_3dReal(stream, field, precision, ierr)
+   subroutine MPAS_streamAddField_3dReal(stream, field, precision, activeConstituents, ierr)
 
       implicit none
 
       type (MPAS_Stream_type), intent(inout) :: stream
       type (field3DReal), intent(in), target :: field
       integer, intent(in), optional :: precision
+      logical, dimension(:), intent(in), optional :: activeConstituents  ! For var_arrays, the constituents to include in this stream
       integer, intent(out), optional :: ierr
 
       integer :: io_err
@@ -1182,7 +1183,9 @@ module mpas_io_streams
          allocate(isAvailable(size(field % constituentNames)))
          isAvailable(:) = .false.
          do i=1,size(field % constituentNames)
-            if (.not. field % isconstituentActive(i)) cycle
+            if (present(activeConstituents)) then
+               if (.not. activeConstituents(i)) cycle
+            end if
             call MPAS_streamAddField_generic(stream, trim(field % constituentNames(i)), REAL_IO_TYPE , field % dimNames(2:ndims), &
                                              field % dimSizes(2:ndims), field % hasTimeDimension, field % isDecomposed, totalDimSize, globalDimSize, &
                                              indices, precision=local_precision, ierr=io_err)
@@ -1208,7 +1211,9 @@ module mpas_io_streams
 
       if (field % isVarArray) then
          do i=1,size(field % constituentNames)
-            if (.not. field % isconstituentActive(i)) cycle
+            if (present(activeConstituents)) then
+               if (.not. activeConstituents(i)) cycle
+            end if
             call put_get_field_atts(stream % fileHandle, stream % ioDirection, trim(field % constituentNames(i)), field % attLists(i) % attList)
          end do
       else
@@ -3698,7 +3703,9 @@ module mpas_io_streams
             end if
 
             do j=1,ncons
-               if ( .not. field_cursor % real3dField % isConstituentActive(j)) cycle
+               if (field_cursor % real3dField % isVarArray) then
+                  if (.not. field_cursor % isAvailable(j)) cycle
+               end if
                if (field_cursor % isDecomposed) then
                   ! Gather field from across multiple blocks
                   field_3dreal_ptr => field_cursor % real3dField

@@ -2360,7 +2360,6 @@ module mpas_field_routines
 
                if (associated(f_cursor % constituentNames)) then
                    deallocate(f_cursor % constituentNames)
-                   deallocate(f_cursor % isConstituentActive)
                end if
 
                f_cursor => f_next

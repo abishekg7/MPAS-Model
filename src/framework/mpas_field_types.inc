@@ -87,7 +87,6 @@
       ! Information used by the I/O layer
       character (len=StrKIND) :: fieldName
       character (len=StrKIND), dimension(:), pointer :: constituentNames => null()
-      logical, dimension(:), pointer :: isConstituentActive => null()
       character (len=StrKIND), dimension(3) :: dimNames
       integer, dimension(3) :: dimSizes
       real (kind=RKIND) :: defaultValue
