@@ -574,7 +574,8 @@ module atm_core_interface
          scalarsField(i) % isPersistent = .true.
 
          allocate(scalarsField(i) % constituentNames(num_scalars))
-
+         allocate(scalarsField(i) % isConstituentActive(num_scalars))
+         scalarsField(i) % isConstituentActive(:) = .true.
          allocate(scalarsField(i) % attLists(num_scalars))
          do j = 1, num_scalars
             allocate(scalarsField(i) % attLists(j) % attList)
@@ -619,7 +620,8 @@ module atm_core_interface
          scalarsField(i) % isPersistent = .true.
 
          allocate(scalarsField(i) % constituentNames(num_scalars))
-
+         allocate(scalarsField(i) % isConstituentActive(num_scalars))
+         scalarsField(i) % isConstituentActive(:) = .true.
          allocate(scalarsField(i) % attLists(num_scalars))
          do j = 1, num_scalars
             allocate(scalarsField(i) % attLists(j) % attList)

@@ -1182,6 +1182,7 @@ module mpas_io_streams
          allocate(isAvailable(size(field % constituentNames)))
          isAvailable(:) = .false.
          do i=1,size(field % constituentNames)
+            if (.not. field % isconstituentActive(i)) cycle
             call MPAS_streamAddField_generic(stream, trim(field % constituentNames(i)), REAL_IO_TYPE , field % dimNames(2:ndims), &
                                              field % dimSizes(2:ndims), field % hasTimeDimension, field % isDecomposed, totalDimSize, globalDimSize, &
                                              indices, precision=local_precision, ierr=io_err)
@@ -1207,6 +1208,7 @@ module mpas_io_streams
 
       if (field % isVarArray) then
          do i=1,size(field % constituentNames)
+            if (.not. field % isconstituentActive(i)) cycle
             call put_get_field_atts(stream % fileHandle, stream % ioDirection, trim(field % constituentNames(i)), field % attLists(i) % attList)
          end do
       else
@@ -3696,6 +3698,7 @@ module mpas_io_streams
             end if
 
             do j=1,ncons
+               if ( .not. field_cursor % real3dField % isConstituentActive(j)) cycle
                if (field_cursor % isDecomposed) then
                   ! Gather field from across multiple blocks
                   field_3dreal_ptr => field_cursor % real3dField
