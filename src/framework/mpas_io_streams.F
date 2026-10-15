@@ -1183,6 +1183,8 @@ module mpas_io_streams
          allocate(isAvailable(size(field % constituentNames)))
          isAvailable(:) = .false.
          do i=1,size(field % constituentNames)
+            call mpas_log_write('streamAddField -- Constituent: '//trim(field % constituentNames(i)))
+
             if (present(activeConstituents)) then
                if (.not. activeConstituents(i)) cycle
             end if
@@ -3703,12 +3705,14 @@ module mpas_io_streams
             end if
 
             do j=1,ncons
-               if (field_cursor % real3dField % isVarArray) then
-                  if (.not. field_cursor % isAvailable(j)) cycle
-               end if
+               ! if (field_cursor % real3dField % isVarArray) then
+               !    if (.not. field_cursor % isAvailable(j)) cycle
+               ! end if
+               call mpas_log_write('Write stream -- Constituent: '//trim(field_cursor % real3dField % constituentNames(j)))
                if (field_cursor % isDecomposed) then
                   ! Gather field from across multiple blocks
                   field_3dreal_ptr => field_cursor % real3dField
+                  
                   i = 1
                   do while (associated(field_3dreal_ptr))
                      if (trim(field_3dreal_ptr % dimNames(3)) == 'nCells') then
