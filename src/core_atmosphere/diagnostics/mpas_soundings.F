@@ -5,6 +5,15 @@
 ! Additional copyright and license information can be found in the LICENSE file
 ! distributed with this code, or at http://mpas-dev.github.com/license.html
 !
+
+#ifdef MPAS_OPENACC
+#define MPAS_ACC_TIMER_START(X) call mpas_timer_start(X)
+#define MPAS_ACC_TIMER_STOP(X) call mpas_timer_stop(X)
+#else
+#define MPAS_ACC_TIMER_START(X)
+#define MPAS_ACC_TIMER_STOP(X)
+#endif
+
 module mpas_soundings
 
     use mpas_kind_types, only : RKIND, StrKIND
@@ -12,6 +21,7 @@ module mpas_soundings
     use mpas_log, only : mpas_log_write
 
     public :: soundings_setup, &
+              soundings_pre_compute, &
               soundings_compute, &
               soundings_cleanup
 
@@ -211,6 +221,61 @@ module mpas_soundings
         end if
 
     end subroutine soundings_setup
+
+
+    !-----------------------------------------------------------------------
+    !  routine soundings_pre_compute
+    !
+    !> \brief Copies device-resident fields to the host for soundings_compute
+    !> \details
+    !>  When dynamics fields are resident on the GPU, the host copies of
+    !>  the fields read by soundings_compute are stale. This routine updates
+    !>  them on the host when the sounding alarm is ringing. It must be called
+    !>  before soundings_compute, which resets the alarm. It does nothing in
+    !>  non-OpenACC builds.
+    !
+    !-----------------------------------------------------------------------
+    subroutine soundings_pre_compute()
+
+#ifdef MPAS_OPENACC
+        use mpas_pool_routines, only : MPAS_pool_get_array
+        use mpas_timekeeping, only : MPAS_is_alarm_ringing
+        use mpas_timer, only : mpas_timer_start, mpas_timer_stop
+#endif
+
+        implicit none
+
+
+#ifdef MPAS_OPENACC
+        real (kind=RKIND), dimension(:,:), pointer :: exner, pressure_base, pressure_p
+        real (kind=RKIND), dimension(:,:), pointer :: uReconstructZonal, uReconstructMeridional
+        real (kind=RKIND), dimension(:,:), pointer :: theta_m_1
+        real (kind=RKIND), dimension(:,:,:), pointer :: scalars_1
+
+        if (nSoundings == 0) return
+
+        if (MPAS_is_alarm_ringing(simulationClock, 'soundingAlarm')) then
+            MPAS_ACC_TIMER_START('soundings_compute [ACC_data_xfer]')
+            call MPAS_pool_get_array(diag, 'exner', exner)
+            !$acc update host(exner)
+            call MPAS_pool_get_array(diag, 'pressure_base', pressure_base)
+            !$acc update host(pressure_base)
+            call MPAS_pool_get_array(diag, 'pressure_p', pressure_p)
+            !$acc update host(pressure_p)
+            call MPAS_pool_get_array(diag, 'uReconstructZonal', uReconstructZonal)
+            !$acc update host(uReconstructZonal)
+            call MPAS_pool_get_array(diag, 'uReconstructMeridional', uReconstructMeridional)
+            !$acc update host(uReconstructMeridional)
+
+            call MPAS_pool_get_array(state, 'theta_m', theta_m_1, 1)
+            !$acc update host(theta_m_1)
+            call MPAS_pool_get_array(state, 'scalars', scalars_1, 1)
+            !$acc update host(scalars_1)
+            MPAS_ACC_TIMER_STOP('soundings_compute [ACC_data_xfer]')
+        end if
+#endif
+
+    end subroutine soundings_pre_compute
 
 
     !-----------------------------------------------------------------------

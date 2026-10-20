@@ -5,6 +5,15 @@
 ! Additional copyright and license information can be found in the LICENSE file
 ! distributed with this code, or at http://mpas-dev.github.com/license.html
 !
+
+#ifdef MPAS_OPENACC
+#define MPAS_ACC_TIMER_START(X) call mpas_timer_start(X)
+#define MPAS_ACC_TIMER_STOP(X) call mpas_timer_stop(X)
+#else
+#define MPAS_ACC_TIMER_START(X)
+#define MPAS_ACC_TIMER_STOP(X)
+#endif
+
 module mpas_pv_diagnostics
 
     use mpas_derived_types, only : MPAS_pool_type, MPAS_clock_type
@@ -21,6 +30,7 @@ module mpas_pv_diagnostics
     type (MPAS_clock_type), pointer :: clock
 
     public :: pv_diagnostics_setup, &
+              pv_diagnostics_pre_compute, &
               pv_diagnostics_compute
 
     private
@@ -67,6 +77,110 @@ module mpas_pv_diagnostics
         clock => simulation_clock
    
     end subroutine pv_diagnostics_setup
+
+
+    !-----------------------------------------------------------------------
+    !  routine pv_diagnostics_pre_compute
+    !
+    !> \brief Copies device-resident fields to the host for pv_diagnostics_compute
+    !> \details
+    !>  When dynamics fields are resident on the GPU, the host copies of
+    !>  the fields read by atm_compute_pv_diagnostics and
+    !>  atm_compute_pvBudget_diagnostics are stale. This routine updates
+    !>  them on the host when any PV diagnostic or PV budget field will be
+    !>  written. It does nothing in non-OpenACC builds.
+    !
+    !-----------------------------------------------------------------------
+    subroutine pv_diagnostics_pre_compute()
+
+#ifdef MPAS_OPENACC
+        use mpas_atm_diagnostics_utils, only : MPAS_field_will_be_written
+        use mpas_pool_routines, only : mpas_pool_get_array
+        use mpas_timer, only : mpas_timer_start, mpas_timer_stop
+#endif
+
+        implicit none
+
+
+#ifdef MPAS_OPENACC
+        character(len=*), dimension(6), parameter :: pv_names = (/ 'ertel_pv', 'u_pv    ', 'v_pv    ', &
+                                                                     'theta_pv', 'vort_pv ', 'iLev_DT ' /)
+#ifdef DO_PHYSICS
+        character(len=*), dimension(11), parameter :: budget_names = (/ 'depv_dt_lw     ', 'depv_dt_sw     ', &
+                                                                         'depv_dt_bl     ', 'depv_dt_cu     ', &
+                                                                         'depv_dt_mix    ', 'dtheta_dt_mp   ', &
+                                                                         'depv_dt_mp     ', 'depv_dt_diab   ', &
+                                                                         'depv_dt_fric   ', 'depv_dt_diab_pv', &
+                                                                         'depv_dt_fric_pv' /)
+#endif
+        logical :: need_any_diags, need_any_budget
+        integer :: i
+
+        real (kind=RKIND), dimension(:,:), pointer :: vorticity, uReconstructX, uReconstructY, uReconstructZ
+        real (kind=RKIND), dimension(:,:), pointer :: w_1, theta_m_1, rho_zz_1
+        real (kind=RKIND), dimension(:,:,:), pointer :: scalars_1
+#ifdef DO_PHYSICS
+        real (kind=RKIND), dimension(:,:), pointer :: rho_edge, tend_u_euler, tend_w_euler, tend_theta_euler
+#endif
+
+        need_any_budget = .false.
+#ifdef DO_PHYSICS
+        do i = 1, size(budget_names)
+            if (MPAS_field_will_be_written(trim(budget_names(i)))) then
+                need_any_budget = .true.
+                exit
+            end if
+        end do
+#endif
+
+        ! As in pv_diagnostics_compute, any budget field also requires the PV diagnostics
+        need_any_diags = need_any_budget
+        if (.not. need_any_diags) then
+            do i = 1, size(pv_names)
+                if (MPAS_field_will_be_written(trim(pv_names(i)))) then
+                    need_any_diags = .true.
+                    exit
+                end if
+            end do
+        end if
+
+        if (need_any_diags) then
+            MPAS_ACC_TIMER_START('pv_diagnostics_compute [ACC_data_xfer]')
+            call mpas_pool_get_array(diag, 'vorticity', vorticity)
+            !$acc update host(vorticity)
+            call mpas_pool_get_array(diag, 'uReconstructX', uReconstructX)
+            !$acc update host(uReconstructX)
+            call mpas_pool_get_array(diag, 'uReconstructY', uReconstructY)
+            !$acc update host(uReconstructY)
+            call mpas_pool_get_array(diag, 'uReconstructZ', uReconstructZ)
+            !$acc update host(uReconstructZ)
+
+            call mpas_pool_get_array(state, 'w', w_1, 1)
+            !$acc update host(w_1)
+            call mpas_pool_get_array(state, 'theta_m', theta_m_1, 1)
+            !$acc update host(theta_m_1)
+            call mpas_pool_get_array(state, 'rho_zz', rho_zz_1, 1)
+            !$acc update host(rho_zz_1)
+            call mpas_pool_get_array(state, 'scalars', scalars_1, 1)
+            !$acc update host(scalars_1)
+
+#ifdef DO_PHYSICS
+            if (need_any_budget) then
+                call mpas_pool_get_array(diag, 'rho_edge', rho_edge)
+                !$acc update host(rho_edge)
+                call mpas_pool_get_array(tend, 'u_euler', tend_u_euler)
+                !$acc update host(tend_u_euler)
+                call mpas_pool_get_array(tend, 'w_euler', tend_w_euler)
+                !$acc update host(tend_w_euler)
+                call mpas_pool_get_array(tend, 'theta_euler', tend_theta_euler)
+                !$acc update host(tend_theta_euler)
+            end if
+#endif
+            MPAS_ACC_TIMER_STOP('pv_diagnostics_compute [ACC_data_xfer]')
+        end if
+#endif
+
+    end subroutine pv_diagnostics_pre_compute
 
 
     !-----------------------------------------------------------------------

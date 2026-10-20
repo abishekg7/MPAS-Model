@@ -5,6 +5,15 @@
 ! Additional copyright and license information can be found in the LICENSE file
 ! distributed with this code, or at http://mpas-dev.github.com/license.html
 !
+
+#ifdef MPAS_OPENACC
+#define MPAS_ACC_TIMER_START(X) call mpas_timer_start(X)
+#define MPAS_ACC_TIMER_STOP(X) call mpas_timer_stop(X)
+#else
+#define MPAS_ACC_TIMER_START(X)
+#define MPAS_ACC_TIMER_STOP(X)
+#endif
+
 module mpas_isobaric_diagnostics
 
     use mpas_dmpar
@@ -21,6 +30,7 @@ module mpas_isobaric_diagnostics
     type (MPAS_clock_type), pointer :: clock
 
     public :: isobaric_diagnostics_setup, &
+              isobaric_diagnostics_pre_compute, &
               isobaric_diagnostics_compute
 
     private
@@ -69,6 +79,119 @@ module mpas_isobaric_diagnostics
         call mpas_pool_get_subpool(all_pools, 'diag', diag)
    
     end subroutine isobaric_diagnostics_setup
+
+
+    !-----------------------------------------------------------------------
+    !  routine isobaric_diagnostics_pre_compute
+    !
+    !> \brief Copies device-resident fields to the host for isobaric_diagnostics_compute
+    !> \details
+    !>  When dynamics fields are resident on the GPU, the host copies of
+    !>  the fields read by interp_diagnostics are stale. This routine
+    !>  updates on the host only those fields needed by the isobaric
+    !>  diagnostics that will be written. It does nothing in non-OpenACC builds.
+    !
+    !-----------------------------------------------------------------------
+    subroutine isobaric_diagnostics_pre_compute()
+
+#ifdef MPAS_OPENACC
+        use mpas_atm_diagnostics_utils, only : MPAS_field_will_be_written
+        use mpas_timer, only : mpas_timer_start, mpas_timer_stop
+#endif
+
+        implicit none
+
+
+#ifdef MPAS_OPENACC
+        logical :: pre_need_thermo, pre_need_w, pre_need_vorticity, pre_need_uzonal, pre_need_umeridional
+
+        real (kind=RKIND), dimension(:,:), pointer :: exner, pressure_base, pressure_p
+        real (kind=RKIND), dimension(:,:), pointer :: vorticity, uReconstructZonal, uReconstructMeridional
+        real (kind=RKIND), dimension(:,:), pointer :: w_1, theta_m_1
+        real (kind=RKIND), dimension(:,:,:), pointer :: scalars_1
+
+        pre_need_w = any_isobaric_level_written('w')
+        pre_need_vorticity = any_isobaric_level_written('vorticity')
+        pre_need_uzonal = any_isobaric_level_written('uzonal')
+        pre_need_umeridional = any_isobaric_level_written('umeridional')
+        pre_need_thermo = MPAS_field_will_be_written('mslp') &
+                          .or. MPAS_field_will_be_written('t_isobaric') &
+                          .or. MPAS_field_will_be_written('z_isobaric') &
+                          .or. MPAS_field_will_be_written('meanT_500_300') &
+                          .or. any_isobaric_level_written('relhum') &
+                          .or. any_isobaric_level_written('dewpoint') &
+                          .or. any_isobaric_level_written('temperature') &
+                          .or. any_isobaric_level_written('height')
+
+        if (pre_need_thermo .or. pre_need_w .or. pre_need_vorticity .or. pre_need_uzonal .or. pre_need_umeridional) then
+            MPAS_ACC_TIMER_START('isobaric_diagnostics_compute [ACC_data_xfer]')
+            ! Pressure is needed for vertical interpolation of any isobaric field
+            call mpas_pool_get_array(diag, 'pressure_base', pressure_base)
+            !$acc update host(pressure_base)
+            call mpas_pool_get_array(diag, 'pressure_p', pressure_p)
+            !$acc update host(pressure_p)
+
+            if (pre_need_thermo) then
+                call mpas_pool_get_array(diag, 'exner', exner)
+                !$acc update host(exner)
+                call mpas_pool_get_array(state, 'theta_m', theta_m_1, 1)
+                !$acc update host(theta_m_1)
+                call mpas_pool_get_array(state, 'scalars', scalars_1, 1)
+                !$acc update host(scalars_1)
+            end if
+
+            if (pre_need_w) then
+                call mpas_pool_get_array(state, 'w', w_1, 1)
+                !$acc update host(w_1)
+            end if
+
+            if (pre_need_vorticity) then
+                call mpas_pool_get_array(diag, 'vorticity', vorticity)
+                !$acc update host(vorticity)
+            end if
+
+            if (pre_need_uzonal) then
+                call mpas_pool_get_array(diag, 'uReconstructZonal', uReconstructZonal)
+                !$acc update host(uReconstructZonal)
+            end if
+
+            if (pre_need_umeridional) then
+                call mpas_pool_get_array(diag, 'uReconstructMeridional', uReconstructMeridional)
+                !$acc update host(uReconstructMeridional)
+            end if
+            MPAS_ACC_TIMER_STOP('isobaric_diagnostics_compute [ACC_data_xfer]')
+        end if
+#endif
+
+    end subroutine isobaric_diagnostics_pre_compute
+
+
+    !-----------------------------------------------------------------------
+    !  function any_isobaric_level_written
+    !
+    !> \brief Returns whether <prefix>_<level>hPa will be written for any level
+    !
+    !-----------------------------------------------------------------------
+    logical function any_isobaric_level_written(prefix)
+
+        use mpas_atm_diagnostics_utils, only : MPAS_field_will_be_written
+
+        implicit none
+
+        character(len=*), intent(in) :: prefix
+
+        character(len=3), dimension(8), parameter :: levels = (/ '50 ', '100', '200', '250', '500', '700', '850', '925' /)
+        integer :: i
+
+        any_isobaric_level_written = .false.
+        do i = 1, size(levels)
+            if (MPAS_field_will_be_written(trim(prefix)//'_'//trim(levels(i))//'hPa')) then
+                any_isobaric_level_written = .true.
+                return
+            end if
+        end do
+
+    end function any_isobaric_level_written
 
 
     !-----------------------------------------------------------------------

@@ -5,6 +5,15 @@
 ! Additional copyright and license information can be found in the LICENSE file
 ! distributed with this code, or at http://mpas-dev.github.com/license.html
 !
+
+#ifdef MPAS_OPENACC
+#define MPAS_ACC_TIMER_START(X) call mpas_timer_start(X)
+#define MPAS_ACC_TIMER_STOP(X) call mpas_timer_stop(X)
+#else
+#define MPAS_ACC_TIMER_START(X)
+#define MPAS_ACC_TIMER_STOP(X)
+#endif
+
 module mpas_convective_diagnostics
 
     use mpas_derived_types, only : MPAS_pool_type, MPAS_clock_type, MPAS_LOG_ERR, MPAS_LOG_CRIT
@@ -18,7 +27,9 @@ module mpas_convective_diagnostics
     type (MPAS_clock_type), pointer :: clock
 
     public :: convective_diagnostics_setup, &
+              convective_diagnostics_pre_update, &
               convective_diagnostics_update, &
+              convective_diagnostics_pre_compute, &
               convective_diagnostics_compute, &
               convective_diagnostics_reset
 
@@ -83,6 +94,58 @@ module mpas_convective_diagnostics
         end if
    
     end subroutine convective_diagnostics_setup
+
+
+    !-----------------------------------------------------------------------
+    !  routine convective_diagnostics_pre_update
+    !
+    !> \brief Copies device-resident fields to the host for convective_diagnostics_update
+    !> \details
+    !>  When dynamics fields are resident on the GPU, the host copies of
+    !>  the fields read by convective_diagnostics_update are stale. This routine
+    !>  updates on the host only those fields needed by the maximum-value
+    !>  diagnostics that appear in an output stream. It does nothing in
+    !>  non-OpenACC builds.
+    !
+    !-----------------------------------------------------------------------
+    subroutine convective_diagnostics_pre_update()
+
+#ifdef MPAS_OPENACC
+        use mpas_pool_routines, only : mpas_pool_get_array
+        use mpas_timer, only : mpas_timer_start, mpas_timer_stop
+#endif
+
+        implicit none
+
+
+#ifdef MPAS_OPENACC
+        real (kind=RKIND), dimension(:,:), pointer :: vorticity, w_1
+        real (kind=RKIND), dimension(:,:), pointer :: uReconstructZonal, uReconstructMeridional
+
+        if (is_needed_updraft_helicity .or. is_needed_w_max .or. is_needed_lml_wsp_max) then
+
+        MPAS_ACC_TIMER_START('convective_diagnostics_update [ACC_data_xfer]')
+        if (is_needed_updraft_helicity .or. is_needed_w_max) then
+            call mpas_pool_get_array(state, 'w', w_1, 1)
+            !$acc update host(w_1)
+        end if
+
+        if (is_needed_updraft_helicity) then
+            call mpas_pool_get_array(diag, 'vorticity', vorticity)
+            !$acc update host(vorticity)
+        end if
+
+        if (is_needed_lml_wsp_max) then
+            call mpas_pool_get_array(diag, 'uReconstructZonal', uReconstructZonal)
+            !$acc update host(uReconstructZonal)
+            call mpas_pool_get_array(diag, 'uReconstructMeridional', uReconstructMeridional)
+            !$acc update host(uReconstructMeridional)
+        end if
+        MPAS_ACC_TIMER_STOP('convective_diagnostics_update [ACC_data_xfer]')
+        end if
+#endif
+
+    end subroutine convective_diagnostics_pre_update
 
 
     !-----------------------------------------------------------------------
@@ -196,6 +259,84 @@ module mpas_convective_diagnostics
         end if
    
     end subroutine convective_diagnostics_update
+
+
+    !-----------------------------------------------------------------------
+    !  routine convective_diagnostics_pre_compute
+    !
+    !> \brief Copies device-resident fields to the host for convective_diagnostics_compute
+    !> \details
+    !>  When dynamics fields are resident on the GPU, the host copies of
+    !>  the fields read by convective_diagnostics_compute are stale. This
+    !>  routine updates them on the host when any of the convective
+    !>  diagnostics computed there will be written. It does nothing in
+    !>  non-OpenACC builds.
+    !
+    !-----------------------------------------------------------------------
+    subroutine convective_diagnostics_pre_compute()
+
+#ifdef MPAS_OPENACC
+        use mpas_atm_diagnostics_utils, only : MPAS_field_will_be_written
+        use mpas_pool_routines, only : mpas_pool_get_array
+        use mpas_timer, only : mpas_timer_start, mpas_timer_stop
+#endif
+
+        implicit none
+
+
+#ifdef MPAS_OPENACC
+        character(len=*), dimension(14), parameter :: diag_names = (/ 'cape               ', &
+                                                                       'cin                ', &
+                                                                       'lcl                ', &
+                                                                       'lfc                ', &
+                                                                       'srh_0_1km          ', &
+                                                                       'srh_0_3km          ', &
+                                                                       'uzonal_surface     ', &
+                                                                       'uzonal_1km         ', &
+                                                                       'uzonal_6km         ', &
+                                                                       'umeridional_surface', &
+                                                                       'umeridional_1km    ', &
+                                                                       'umeridional_6km    ', &
+                                                                       'temperature_surface', &
+                                                                       'dewpoint_surface   ' /)
+        logical :: need_any_diags
+        integer :: i
+
+        real (kind=RKIND), dimension(:,:), pointer :: exner, pressure_base, pressure_p
+        real (kind=RKIND), dimension(:,:), pointer :: uReconstructZonal, uReconstructMeridional
+        real (kind=RKIND), dimension(:,:), pointer :: theta_m_1
+        real (kind=RKIND), dimension(:,:,:), pointer :: scalars_1
+
+        need_any_diags = .false.
+        do i = 1, size(diag_names)
+            if (MPAS_field_will_be_written(trim(diag_names(i)))) then
+                need_any_diags = .true.
+                exit
+            end if
+        end do
+
+        if (need_any_diags) then
+            MPAS_ACC_TIMER_START('convective_diagnostics_compute [ACC_data_xfer]')
+            call mpas_pool_get_array(diag, 'exner', exner)
+            !$acc update host(exner)
+            call mpas_pool_get_array(diag, 'pressure_base', pressure_base)
+            !$acc update host(pressure_base)
+            call mpas_pool_get_array(diag, 'pressure_p', pressure_p)
+            !$acc update host(pressure_p)
+            call mpas_pool_get_array(diag, 'uReconstructZonal', uReconstructZonal)
+            !$acc update host(uReconstructZonal)
+            call mpas_pool_get_array(diag, 'uReconstructMeridional', uReconstructMeridional)
+            !$acc update host(uReconstructMeridional)
+
+            call mpas_pool_get_array(state, 'theta_m', theta_m_1, 1)
+            !$acc update host(theta_m_1)
+            call mpas_pool_get_array(state, 'scalars', scalars_1, 1)
+            !$acc update host(scalars_1)
+            MPAS_ACC_TIMER_STOP('convective_diagnostics_compute [ACC_data_xfer]')
+        end if
+#endif
+
+    end subroutine convective_diagnostics_pre_compute
 
 
     !-----------------------------------------------------------------------

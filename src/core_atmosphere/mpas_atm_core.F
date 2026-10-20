@@ -5,6 +5,15 @@
 ! Additional copyright and license information can be found in the LICENSE file
 ! distributed with this code, or at http://mpas-dev.github.com/license.html
 !
+
+#ifdef MPAS_OPENACC
+#define MPAS_ACC_TIMER_START(X) call mpas_timer_start(X)
+#define MPAS_ACC_TIMER_STOP(X) call mpas_timer_stop(X)
+#else
+#define MPAS_ACC_TIMER_START(X)
+#define MPAS_ACC_TIMER_STOP(X)
+#endif
+
 module atm_core
 
    use mpas_derived_types
@@ -31,7 +40,8 @@ module atm_core
       use mpas_atm_diagnostics_manager, only : mpas_atm_diag_setup
       use mpas_atm_threading, only : mpas_atm_threading_init
       use atm_time_integration, only : mpas_atm_dynamics_init, &
-                              mpas_atm_pre_dynamics, mpas_atm_post_dynamics
+                              mpas_atm_pre_dynamics, mpas_atm_post_dynamics, &
+                              mpas_atm_pre_lbcs, mpas_atm_post_lbcs
       use mpas_timer, only : mpas_timer_start, mpas_timer_stop
       use mpas_attlist, only : mpas_modify_att
       use mpas_string_utils, only : mpas_string_replace
@@ -285,6 +295,7 @@ module atm_core
       ! Prepare the dynamics for integration
       !
       call mpas_atm_dynamics_init(domain)
+      call mpas_atm_pre_dynamics(domain % blocklist)
 
       !
       ! Initialize the chemistry package
@@ -549,18 +560,18 @@ module atm_core
       call mpas_pool_get_array(diag, 'uReconstructZ', uReconstructZ)
       call mpas_pool_get_array(diag, 'uReconstructZonal', uReconstructZonal)
       call mpas_pool_get_array(diag, 'uReconstructMeridional', uReconstructMeridional)
-      call mpas_reconstruct_2d_h2d(mesh, u, uReconstructX, uReconstructY, uReconstructZ, &
-                                   uReconstructZonal, uReconstructMeridional)
+      !call mpas_reconstruct_2d_h2d(mesh, u, uReconstructX, uReconstructY, uReconstructZ, &
+      !                             uReconstructZonal, uReconstructMeridional)
       call mpas_reconstruct(mesh, u,                   &
                             uReconstructX,             &
                             uReconstructY,             &
                             uReconstructZ,             &
                             uReconstructZonal,         &
                             uReconstructMeridional,    &
-                            lACC = .true.              &
+                            lACC = .false.              &
                            )
-      call mpas_reconstruct_2d_d2h(mesh, u, uReconstructX, uReconstructY, uReconstructZ, &
-               uReconstructZonal, uReconstructMeridional)
+      !call mpas_reconstruct_2d_d2h(mesh, u, uReconstructX, uReconstructY, uReconstructZ, &
+      !         uReconstructZonal, uReconstructMeridional)
    
 #ifdef DO_PHYSICS
       !proceed with initialization of physics parameterization if moist_physics is set to true:
@@ -626,6 +637,7 @@ module atm_core
       use mpas_timer, only : mpas_timer_start, mpas_timer_stop
       use mpas_atm_boundaries, only : mpas_atm_update_bdy_tend
       use mpas_atm_diagnostics_manager, only : mpas_atm_diag_update, mpas_atm_diag_compute, mpas_atm_diag_reset
+      use atm_time_integration, only : mpas_atm_pre_lbcs
    
       implicit none
    
@@ -683,8 +695,9 @@ module atm_core
             call mpas_pool_get_subpool(block_ptr % structs, 'diag_physics', diag_physics)
 #endif
             call mpas_pool_get_subpool(block_ptr % structs, 'mesh', mesh)
+            !call mpas_atm_pre_compute_output_diagnostics(block_ptr)
             call atm_compute_output_diagnostics(state, 1, diag, mesh)
-
+            call mpas_atm_post_compute_output_diagnostics(block_ptr)
             block_ptr => block_ptr % next
          end do
       end if
@@ -732,6 +745,8 @@ module atm_core
       !
       ! Read initial boundary state
       !
+      if(config_apply_lbcs) call mpas_atm_pre_lbcs(domain % blocklist)
+
       if (config_apply_lbcs .and. &
           MPAS_stream_mgr_ringing_alarms(domain % streamManager, streamID='lbc_in', direction=MPAS_STREAM_INPUT, ierr=ierr)) then
          block_ptr => domain % blocklist
@@ -782,7 +797,7 @@ module atm_core
 
 
          !
-         ! Read external field updates
+         ! Read external field updates.  TODO: Should we check the time of the input fields to make sure they are valid for the current time step?
          !
          call MPAS_stream_mgr_begin_iteration(domain % streamManager, ierr=ierr)
          do while (MPAS_stream_mgr_get_next_stream(domain % streamManager, streamID=input_stream, directionProperty=stream_dir))
@@ -821,7 +836,7 @@ module atm_core
          ! Move time level 2 fields back into time level 1 for next time step
          call mpas_pool_get_subpool(domain % blocklist % structs, 'state', state)
          call mpas_pool_shift_time_levels(state)
-         
+
          ! Advance clock before writing output
          itimestep = itimestep + 1
          call mpas_advance_clock(clock)
@@ -845,11 +860,14 @@ module atm_core
 #endif
               call mpas_pool_get_subpool(block_ptr % structs, 'mesh', mesh)
               call mpas_pool_get_subpool(block_ptr % structs, 'tend', tend)
+              call mpas_atm_pre_diagnostics(block_ptr)
+              !call mpas_atm_pre_compute_output_diagnostics(block_ptr)
               call atm_compute_output_diagnostics(state, 1, diag, mesh)
-
+              call mpas_atm_post_compute_output_diagnostics(block_ptr)
               block_ptr => block_ptr % next
            end do
          end if
+         
 
          call mpas_timer_start('diagnostic_fields')
          call mpas_atm_diag_update()
@@ -963,6 +981,286 @@ module atm_core
       end do
 
    end subroutine atm_compute_output_diagnostics
+
+
+   subroutine mpas_atm_pre_compute_output_diagnostics(block)
+
+#ifdef MPAS_OPENACC
+      use mpas_timer, only : mpas_timer_start, mpas_timer_stop
+#endif
+
+      implicit none
+
+      type (block_type), intent(inout) :: block
+
+
+#ifdef MPAS_OPENACC
+      type (mpas_pool_type), pointer :: state
+      type (mpas_pool_type), pointer :: diag
+
+      real (kind=RKIND), dimension(:,:), pointer :: pressure_base, pressure_p
+      real (kind=RKIND), dimension(:,:), pointer :: theta_m_1, rho_zz_1
+      real (kind=RKIND), dimension(:,:,:), pointer :: scalars_1
+
+      nullify(state)
+      nullify(diag)
+      call mpas_pool_get_subpool(block % structs, 'state', state)
+      call mpas_pool_get_subpool(block % structs, 'diag', diag)
+
+      MPAS_ACC_TIMER_START('atm_compute_output_diagnostics [ACC_data_xfer]')
+      call mpas_pool_get_array(diag, 'pressure_base', pressure_base)
+      !$acc update host(pressure_base)
+      call mpas_pool_get_array(diag, 'pressure_p', pressure_p)
+      !$acc update host(pressure_p)
+
+      call mpas_pool_get_array(state, 'theta_m', theta_m_1, 1)
+      !$acc update host(theta_m_1)
+      call mpas_pool_get_array(state, 'rho_zz', rho_zz_1, 1)
+      !$acc update host(rho_zz_1)
+      call mpas_pool_get_array(state, 'scalars', scalars_1, 1)
+      !$acc update host(scalars_1)
+      MPAS_ACC_TIMER_STOP('atm_compute_output_diagnostics [ACC_data_xfer]')
+#endif
+
+   end subroutine mpas_atm_pre_compute_output_diagnostics
+
+
+   subroutine mpas_atm_post_compute_output_diagnostics(block)
+
+#ifdef MPAS_OPENACC
+      use mpas_timer, only : mpas_timer_start, mpas_timer_stop
+#endif
+
+      implicit none
+
+      type (block_type), intent(inout) :: block
+
+
+#ifdef MPAS_OPENACC
+      type (mpas_pool_type), pointer :: diag
+
+      real (kind=RKIND), dimension(:,:), pointer :: theta, rho, pressure
+
+      nullify(diag)
+      call mpas_pool_get_subpool(block % structs, 'diag', diag)
+
+      MPAS_ACC_TIMER_START('atm_compute_output_diagnostics [ACC_data_xfer]')
+      call mpas_pool_get_array(diag, 'theta', theta)
+      !$acc update device(theta)
+      call mpas_pool_get_array(diag, 'rho', rho)
+      !$acc update device(rho)
+      call mpas_pool_get_array(diag, 'pressure', pressure)
+      !$acc update device(pressure)
+      MPAS_ACC_TIMER_STOP('atm_compute_output_diagnostics [ACC_data_xfer]')
+#endif
+
+   end subroutine mpas_atm_post_compute_output_diagnostics
+
+
+   subroutine mpas_atm_pre_diagnostics(block)
+
+#ifdef MPAS_OPENACC
+      use mpas_timer, only : mpas_timer_start, mpas_timer_stop
+#endif
+
+      implicit none
+
+      type (block_type), intent(inout) :: block
+
+
+#ifdef MPAS_OPENACC
+      type (mpas_pool_type), pointer :: mesh
+      type (mpas_pool_type), pointer :: state
+      type (mpas_pool_type), pointer :: diag
+      type (mpas_pool_type), pointer :: tend
+      type (mpas_pool_type), pointer :: tend_physics
+      type (mpas_pool_type), pointer :: lbc
+
+      logical, pointer :: config_apply_lbcs_ptr
+      logical :: config_apply_lbcs
+
+      real (kind=RKIND), dimension(:,:), pointer :: ru, ru_p
+      real (kind=RKIND), dimension(:,:), pointer :: ru_save
+      real (kind=RKIND), dimension(:,:), pointer :: rw, rw_p
+      real (kind=RKIND), dimension(:,:), pointer :: rw_save
+      real (kind=RKIND), dimension(:,:), pointer :: rtheta_p
+      real (kind=RKIND), dimension(:,:), pointer :: exner, exner_base
+      real (kind=RKIND), dimension(:,:), pointer :: rtheta_base, rho_base
+      real (kind=RKIND), dimension(:,:), pointer :: rtheta_p_save
+      real (kind=RKIND), dimension(:,:), pointer :: rho_p, rho_pp, rho, theta, theta_base
+      real (kind=RKIND), dimension(:,:), pointer :: rho_p_save
+      real (kind=RKIND), dimension(:,:), pointer :: rho_zz_old_split
+      real (kind=RKIND), dimension(:,:), pointer :: cqw, rtheta_pp_old, rtheta_pp
+      real (kind=RKIND), dimension(:,:), pointer :: cqu, pressure_base, pressure_p, pressure, v
+      real (kind=RKIND), dimension(:,:), pointer :: kdiff, pv_edge, pv_vertex, pv_cell, rho_edge, h_divergence, ke
+      real (kind=RKIND), dimension(:,:), pointer :: cofwr, cofwz, coftz, cofwt, a_tri, alpha_tri, gamma_tri
+      real (kind=RKIND), dimension(:), pointer :: cofrz
+      real (kind=RKIND), dimension(:,:), pointer :: gradPVn, gradPVt
+
+      real (kind=RKIND), dimension(:,:), pointer :: u_1, u_2
+      real (kind=RKIND), dimension(:,:), pointer :: w_1, w_2
+      real (kind=RKIND), dimension(:,:), pointer :: theta_m_1, theta_m_2
+      real (kind=RKIND), dimension(:,:), pointer :: rho_zz_1, rho_zz_2
+      real (kind=RKIND), dimension(:,:,:), pointer :: scalars_1, scalars_2
+      real (kind=RKIND), dimension(:,:), pointer :: ruAvg, wwAvg, ruAvg_split, wwAvg_split
+
+      integer, pointer :: nCells_ptr
+      integer :: nCells
+      real (kind=RKIND), dimension(:,:), pointer :: uReconstructZonal, uReconstructMeridional, uReconstructX, uReconstructY, uReconstructZ
+
+      real (kind=RKIND), dimension(:,:), pointer :: tend_ru, tend_rt, tend_rho, tend_rw, rt_diabatic_tend
+      real (kind=RKIND), dimension(:,:), pointer :: tend_u_euler, tend_w_euler, tend_theta_euler
+      real(kind=RKIND), dimension(:,:), pointer :: tend_w_pgf, tend_w_buoy
+      real(kind=RKIND), dimension(:,:,:), pointer :: scalar_tend_save
+
+      real (kind=RKIND), dimension(:,:), pointer :: rthdynten, divergence, vorticity
+
+      nullify(mesh)
+      nullify(state)
+      nullify(diag)
+      nullify(tend)
+      nullify(tend_physics)
+
+      call mpas_pool_get_subpool(block % structs, 'mesh', mesh)
+      call mpas_pool_get_subpool(block % structs, 'state', state)
+      call mpas_pool_get_subpool(block % structs, 'diag', diag)
+      call mpas_pool_get_subpool(block % structs, 'tend', tend)
+      call mpas_pool_get_subpool(block % structs, 'tend_physics', tend_physics)
+
+      MPAS_ACC_TIMER_START('mpas_atm_pre_diagnostics [ACC_data_xfer]')
+      call mpas_pool_get_array(diag, 'ru', ru)
+      !$acc update host(ru) ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(diag, 'ru_p', ru_p)
+      !$acc update host(ru_p)
+      call mpas_pool_get_array(diag, 'rw', rw)
+      !$acc update host(rw) ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(diag, 'rw_p', rw_p)
+      !$acc update host(rw_p)
+      call mpas_pool_get_array(diag, 'rtheta_p', rtheta_p)
+      !$acc update host(rtheta_p) ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(diag, 'exner', exner)
+      !$acc update host(exner) ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(diag, 'exner_base', exner_base)
+      !$acc update host(exner_base) ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(diag, 'rtheta_base', rtheta_base)
+      !$acc update host(rtheta_base) ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(diag, 'rho_base', rho_base)
+      !$acc update host(rho_base)
+      call mpas_pool_get_array(diag, 'rho', rho)
+      !$acc update host(rho)
+      call mpas_pool_get_array(diag, 'theta', theta)
+      !$acc update host(theta)
+      call mpas_pool_get_array(diag, 'theta_base', theta_base)
+      !$acc update host(theta_base)
+      call mpas_pool_get_array(diag, 'rho_p', rho_p)
+      !$acc update host(rho_p) ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(diag, 'rho_pp', rho_pp)
+      !$acc update host(rho_pp)
+      call mpas_pool_get_array(diag, 'cqu', cqu)
+      !$acc update host(cqu)
+      call mpas_pool_get_array(diag, 'pressure_p', pressure_p)
+      !$acc update host(pressure_p) ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(diag, 'pressure_base', pressure_base)
+      !$acc update host(pressure_base) ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(diag, 'pressure', pressure)
+      !$acc update host(pressure)
+      call mpas_pool_get_array(diag, 'v', v)
+      !$acc update host(v) ! use values from atm_compute_solve_diagnostics
+      call mpas_pool_get_array(diag, 'rtheta_pp', rtheta_pp)
+      !$acc update host(rtheta_pp)
+      call mpas_pool_get_array(diag, 'rtheta_pp_old', rtheta_pp_old)
+      !$acc update host(rtheta_pp_old)
+      call mpas_pool_get_array(diag, 'kdiff', kdiff)
+      !$acc update host(kdiff)
+      call mpas_pool_get_array(diag, 'pv_edge', pv_edge)
+      !$acc update host(pv_edge) ! use values from atm_compute_solve_diagnostics
+      call mpas_pool_get_array(diag, 'pv_vertex', pv_vertex)
+      !$acc update host(pv_vertex)
+      call mpas_pool_get_array(diag, 'rho_edge', rho_edge)
+      !$acc update host(rho_edge) ! use values from atm_compute_solve_diagnostics
+      call mpas_pool_get_array(diag, 'h_divergence', h_divergence)
+      !$acc update host(h_divergence)
+      call mpas_pool_get_array(diag, 'ke', ke)
+      !$acc update host(ke) ! use values from atm_compute_solve_diagnostics
+
+      call mpas_pool_get_array(diag, 'vorticity', vorticity)
+      !$acc update host(vorticity)
+      call mpas_pool_get_array(diag, 'divergence', divergence)
+      !$acc update host(divergence)
+      call mpas_pool_get_array(diag, 'ruAvg', ruAvg)
+      !$acc update host(ruAvg)
+      call mpas_pool_get_array(diag, 'ruAvg_split', ruAvg_split)
+      !$acc update host(ruAvg_split)
+      call mpas_pool_get_array(diag, 'wwAvg', wwAvg)
+      !$acc update host(wwAvg)
+      call mpas_pool_get_array(diag, 'wwAvg_split', wwAvg_split)
+      !$acc update host(wwAvg_split)
+
+      call mpas_pool_get_dimension(mesh, 'nCellsSolve', nCells_ptr)
+      nCells = nCells_ptr
+      call mpas_pool_get_array(diag, 'uReconstructX', uReconstructX)
+      !$acc update host(uReconstructX)
+      call mpas_pool_get_array(diag, 'uReconstructY', uReconstructY)
+      !$acc update host(uReconstructY)
+      call mpas_pool_get_array(diag, 'uReconstructZ', uReconstructZ)
+      !$acc update host(uReconstructZ)
+      call mpas_pool_get_array(diag, 'uReconstructZonal', uReconstructZonal)
+      !$acc update host(uReconstructZonal)
+      call mpas_pool_get_array(diag, 'uReconstructMeridional', uReconstructMeridional)
+      !$acc update host(uReconstructMeridional)
+
+      call mpas_pool_get_array(state, 'u', u_1, 1)
+      !$acc update host(u_1)
+      call mpas_pool_get_array(state, 'u', u_2, 2)
+      !$acc update host(u_2)
+      call mpas_pool_get_array(state, 'w', w_1, 1)
+      !$acc update host(w_1)
+      call mpas_pool_get_array(state, 'w', w_2, 2)
+      !$acc update host(w_2)
+      call mpas_pool_get_array(state, 'theta_m', theta_m_1, 1)
+      !$acc update host(theta_m_1)   ! use values from atm_init_coupled_diagnostics
+      call mpas_pool_get_array(state, 'theta_m', theta_m_2, 2)
+      !$acc update host(theta_m_2)   ! Delete gives incorrect results
+      call mpas_pool_get_array(state, 'rho_zz', rho_zz_1, 1)
+      !$acc update host(rho_zz_1)
+      call mpas_pool_get_array(state, 'rho_zz', rho_zz_2, 2)
+      !$acc update host(rho_zz_2)
+      call mpas_pool_get_array(state, 'scalars', scalars_1, 1)
+      !$acc update host(scalars_1)
+      call mpas_pool_get_array(state, 'scalars', scalars_2, 2)
+      !$acc update host(scalars_2)   ! Delete gives incorrect results
+
+
+      call mpas_pool_get_array(tend, 'u', tend_ru)
+      !$acc update host(tend_ru)
+      call mpas_pool_get_array(tend, 'rho_zz', tend_rho)
+      !$acc update host(tend_rho)
+      call mpas_pool_get_array(tend, 'theta_m', tend_rt)
+      !$acc update host(tend_rt)
+      call mpas_pool_get_array(tend, 'w', tend_rw)
+      !$acc update host(tend_rw)
+      call mpas_pool_get_array(tend, 'rt_diabatic_tend', rt_diabatic_tend)
+      !$acc update host(rt_diabatic_tend)
+      call mpas_pool_get_array(tend, 'u_euler', tend_u_euler)
+      !$acc update host(tend_u_euler)
+      call mpas_pool_get_array(tend, 'theta_euler', tend_theta_euler)
+      !$acc update host(tend_theta_euler)
+      call mpas_pool_get_array(tend, 'w_euler', tend_w_euler)
+      !$acc update host(tend_w_euler)
+      call mpas_pool_get_array(tend, 'w_pgf', tend_w_pgf)
+      !$acc update host(tend_w_pgf)
+      call mpas_pool_get_array(tend, 'w_buoy', tend_w_buoy)
+      !$acc update host(tend_w_buoy)
+      call mpas_pool_get_array(tend, 'scalars_tend', scalar_tend_save)
+      !$acc update host(scalar_tend_save)
+
+
+      call mpas_pool_get_array(tend_physics, 'rthdynten', rthdynten)
+      !$acc update host(rthdynten)
+      MPAS_ACC_TIMER_STOP('mpas_atm_pre_diagnostics [ACC_data_xfer]')
+#endif
+
+   end subroutine mpas_atm_pre_diagnostics
    
    
    subroutine atm_reset_diagnostics(diag_physics)
@@ -1033,6 +1331,7 @@ module atm_core
       !proceed with physics if moist_physics is set to true:
       if(moist_physics) then
          call physics_timetracker(domain,dt,clock,itimestep,xtime_s)
+         call mpas_atm_pre_physics(domain % blocklist)
          call physics_driver(domain,itimestep,xtime_s)
       endif
 #endif

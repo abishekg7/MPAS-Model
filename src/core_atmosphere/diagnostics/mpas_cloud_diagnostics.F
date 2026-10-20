@@ -4,6 +4,15 @@
 ! Additional copyright and license information can be found in the LICENSE file
 ! distributed with this code, or at https://mpas-dev.github.io/license.html
 !
+
+#ifdef MPAS_OPENACC
+#define MPAS_ACC_TIMER_START(X) call mpas_timer_start(X)
+#define MPAS_ACC_TIMER_STOP(X) call mpas_timer_stop(X)
+#else
+#define MPAS_ACC_TIMER_START(X)
+#define MPAS_ACC_TIMER_STOP(X)
+#endif
+
 module mpas_cloud_diagnostics
 
     use mpas_derived_types, only : MPAS_pool_type, MPAS_clock_type
@@ -18,6 +27,7 @@ module mpas_cloud_diagnostics
     private
 
     public :: cloud_diagnostics_setup, &
+              cloud_diagnostics_pre_compute, &
               cloud_diagnostics_compute
 
 
@@ -53,6 +63,47 @@ module mpas_cloud_diagnostics
         clock => simulation_clock
 
     end subroutine cloud_diagnostics_setup
+
+
+    !-----------------------------------------------------------------------
+    !  routine cloud_diagnostics_pre_compute
+    !
+    !> \brief Copies device-resident fields to the host for cloud_diagnostics_compute
+    !> \details
+    !>  When dynamics fields are resident on the GPU, the host copies of
+    !>  the pressure fields read by cloud_diagnostics_compute are stale.
+    !>  This routine updates them on the host when any of the UPP cloud
+    !>  fraction fields will be written. It does nothing in non-OpenACC builds.
+    !
+    !-----------------------------------------------------------------------
+    subroutine cloud_diagnostics_pre_compute()
+
+#ifdef MPAS_OPENACC
+        use mpas_atm_diagnostics_utils, only : MPAS_field_will_be_written
+        use mpas_pool_routines, only : mpas_pool_get_array
+        use mpas_timer, only : mpas_timer_start, mpas_timer_stop
+#endif
+
+        implicit none
+
+
+#ifdef MPAS_OPENACC
+        real (kind=RKIND), dimension(:,:), pointer :: pressure_base, pressure_p
+
+        if (MPAS_field_will_be_written('cldfrac_low_UPP') .or. &
+            MPAS_field_will_be_written('cldfrac_mid_UPP') .or. &
+            MPAS_field_will_be_written('cldfrac_high_UPP') .or. &
+            MPAS_field_will_be_written('cldfrac_tot_UPP')) then
+            MPAS_ACC_TIMER_START('cloud_diagnostics_compute [ACC_data_xfer]')
+            call mpas_pool_get_array(diag, 'pressure_base', pressure_base)
+            !$acc update host(pressure_base)
+            call mpas_pool_get_array(diag, 'pressure_p', pressure_p)
+            !$acc update host(pressure_p)
+            MPAS_ACC_TIMER_STOP('cloud_diagnostics_compute [ACC_data_xfer]')
+        end if
+#endif
+
+    end subroutine cloud_diagnostics_pre_compute
 
 
     !-----------------------------------------------------------------------

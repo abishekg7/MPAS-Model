@@ -76,12 +76,13 @@ module mpas_atm_diagnostics_manager
     subroutine mpas_atm_diag_update()
 
         use mpas_diagnostic_template, only : diagnostic_template_update
-        use mpas_convective_diagnostics, only : convective_diagnostics_update
+        use mpas_convective_diagnostics, only : convective_diagnostics_pre_update, convective_diagnostics_update
 
         implicit none
 
 
         call diagnostic_template_update()
+        call convective_diagnostics_pre_update()
         call convective_diagnostics_update()
 
     end subroutine mpas_atm_diag_update
@@ -100,20 +101,25 @@ module mpas_atm_diagnostics_manager
     subroutine mpas_atm_diag_compute()
 
         use mpas_diagnostic_template, only : diagnostic_template_compute
-        use mpas_isobaric_diagnostics, only : isobaric_diagnostics_compute
-        use mpas_cloud_diagnostics, only : cloud_diagnostics_compute
-        use mpas_convective_diagnostics, only : convective_diagnostics_compute
-        use mpas_pv_diagnostics, only : pv_diagnostics_compute
-        use mpas_soundings, only : soundings_compute
+        use mpas_isobaric_diagnostics, only : isobaric_diagnostics_pre_compute, isobaric_diagnostics_compute
+        use mpas_cloud_diagnostics, only : cloud_diagnostics_pre_compute, cloud_diagnostics_compute
+        use mpas_convective_diagnostics, only : convective_diagnostics_pre_compute, convective_diagnostics_compute
+        use mpas_pv_diagnostics, only : pv_diagnostics_pre_compute, pv_diagnostics_compute
+        use mpas_soundings, only : soundings_pre_compute, soundings_compute
 
         implicit none
 
 
         call diagnostic_template_compute()
+        !call isobaric_diagnostics_pre_compute()
         call isobaric_diagnostics_compute()
+        !call cloud_diagnostics_pre_compute()
         call cloud_diagnostics_compute()
+        !call convective_diagnostics_pre_compute()
         call convective_diagnostics_compute()
+        !call pv_diagnostics_pre_compute()
         call pv_diagnostics_compute()
+        call soundings_pre_compute()
         call soundings_compute()
 
     end subroutine mpas_atm_diag_compute

@@ -898,11 +898,11 @@ module atm_time_integration
 
    end subroutine mpas_atm_post_compute_solve_diagnostics
 
-   subroutine mpas_atm_pre_dynamics(domain)
+   subroutine mpas_atm_pre_dynamics(block)
 
       implicit none
 
-      type (domain_type), intent(inout) :: domain
+      type (block_type), intent(inout) :: block
 
 
 #ifdef MPAS_OPENACC
@@ -911,10 +911,7 @@ module atm_time_integration
       type (mpas_pool_type), pointer :: diag
       type (mpas_pool_type), pointer :: tend
       type (mpas_pool_type), pointer :: tend_physics
-      type (mpas_pool_type), pointer :: lbc
 
-      logical, pointer :: config_apply_lbcs_ptr
-      logical :: config_apply_lbcs
 
       real (kind=RKIND), dimension(:,:), pointer :: ru, ru_p
       real (kind=RKIND), dimension(:,:), pointer :: ru_save
@@ -953,27 +950,19 @@ module atm_time_integration
 
       real (kind=RKIND), dimension(:,:), pointer :: rthdynten, divergence, vorticity
 
-      real (kind=RKIND), dimension(:,:), pointer :: lbc_u, lbc_w, lbc_ru, lbc_rho_edge, lbc_rho, lbc_rtheta_m, lbc_rho_zz, lbc_theta
-      real (kind=RKIND), dimension(:,:), pointer :: lbc_tend_u, lbc_tend_w, lbc_tend_ru, lbc_tend_rho_edge, lbc_tend_rho
-      real (kind=RKIND), dimension(:,:), pointer :: lbc_tend_rtheta_m, lbc_tend_rho_zz, lbc_tend_theta
 
-      real (kind=RKIND), dimension(:,:,:), pointer :: lbc_scalars, lbc_tend_scalars
 
       nullify(mesh)
       nullify(state)
       nullify(diag)
       nullify(tend)
       nullify(tend_physics)
-      nullify(lbc)
-      call mpas_pool_get_subpool(domain % blocklist % structs, 'mesh', mesh)
-      call mpas_pool_get_subpool(domain % blocklist % structs, 'state', state)
-      call mpas_pool_get_subpool(domain % blocklist % structs, 'diag', diag)
-      call mpas_pool_get_subpool(domain % blocklist % structs, 'tend', tend)
-      call mpas_pool_get_subpool(domain % blocklist % structs, 'tend_physics', tend_physics)
-      call mpas_pool_get_subpool(domain % blocklist % structs, 'lbc', lbc)
+      call mpas_pool_get_subpool(block % structs, 'mesh', mesh)
+      call mpas_pool_get_subpool(block % structs, 'state', state)
+      call mpas_pool_get_subpool(block % structs, 'diag', diag)
+      call mpas_pool_get_subpool(block % structs, 'tend', tend)
+      call mpas_pool_get_subpool(block % structs, 'tend_physics', tend_physics)
 
-      call mpas_pool_get_config(domain % blocklist % configs, 'config_apply_lbcs', config_apply_lbcs_ptr)
-      config_apply_lbcs = config_apply_lbcs_ptr
 
       MPAS_ACC_TIMER_START('atm_srk3 [ACC_data_xfer]')
       call mpas_pool_get_array(diag, 'ru', ru)
@@ -1136,46 +1125,6 @@ module atm_time_integration
       !$acc enter data copyin(scalar_tend_save)
 
 
-      if(config_apply_lbcs) then
-         call mpas_pool_get_array(lbc, 'lbc_u', lbc_u, 2)
-         !$acc enter data copyin(lbc_u)
-         call mpas_pool_get_array(lbc, 'lbc_w', lbc_w, 2)
-         !$acc enter data copyin(lbc_w)
-         call mpas_pool_get_array(lbc, 'lbc_ru', lbc_ru, 2)
-         !$acc enter data copyin(lbc_ru)
-         call mpas_pool_get_array(lbc, 'lbc_rho_edge', lbc_rho_edge, 2)
-         !$acc enter data copyin(lbc_rho_edge)
-         call mpas_pool_get_array(lbc, 'lbc_theta', lbc_theta, 2)
-         !$acc enter data copyin(lbc_theta)
-         call mpas_pool_get_array(lbc, 'lbc_rtheta_m', lbc_rtheta_m, 2)
-         !$acc enter data copyin(lbc_rtheta_m)
-         call mpas_pool_get_array(lbc, 'lbc_rho_zz', lbc_rho_zz, 2)
-         !$acc enter data copyin(lbc_rho_zz)
-         call mpas_pool_get_array(lbc, 'lbc_rho', lbc_rho, 2)
-         !$acc enter data copyin(lbc_rho)
-         call mpas_pool_get_array(lbc, 'lbc_scalars', lbc_scalars, 2)
-         !$acc enter data copyin(lbc_scalars)
-
-         call mpas_pool_get_array(lbc, 'lbc_u', lbc_tend_u, 1)
-         !$acc enter data copyin(lbc_tend_u)
-         call mpas_pool_get_array(lbc, 'lbc_ru', lbc_tend_ru, 1)
-         !$acc enter data copyin(lbc_tend_ru)
-         call mpas_pool_get_array(lbc, 'lbc_rho_edge', lbc_tend_rho_edge, 1)
-         !$acc enter data copyin(lbc_tend_rho_edge)
-         call mpas_pool_get_array(lbc, 'lbc_w', lbc_tend_w, 1)
-         !$acc enter data copyin(lbc_tend_w)
-         call mpas_pool_get_array(lbc, 'lbc_theta', lbc_tend_theta, 1)
-         !$acc enter data copyin(lbc_tend_theta)
-         call mpas_pool_get_array(lbc, 'lbc_rtheta_m', lbc_tend_rtheta_m, 1)
-         !$acc enter data copyin(lbc_tend_rtheta_m)
-         call mpas_pool_get_array(lbc, 'lbc_rho_zz', lbc_tend_rho_zz, 1)
-         !$acc enter data copyin(lbc_tend_rho_zz)
-         call mpas_pool_get_array(lbc, 'lbc_rho', lbc_tend_rho, 1)
-         !$acc enter data copyin(lbc_tend_rho)
-         call mpas_pool_get_array(lbc, 'lbc_scalars', lbc_tend_scalars, 1)
-         !$acc enter data copyin(lbc_tend_scalars)
-      end if
-
       call mpas_pool_get_array(tend_physics, 'rthdynten', rthdynten)
       !$acc enter data copyin(rthdynten)
 
@@ -1185,11 +1134,11 @@ module atm_time_integration
    end subroutine mpas_atm_pre_dynamics
 
 
-   subroutine mpas_atm_post_dynamics(domain)
+   subroutine mpas_atm_post_dynamics(block)
 
       implicit none
 
-      type (domain_type), intent(inout) :: domain
+      type (block_type), intent(inout) :: block
 
 
 #ifdef MPAS_OPENACC
@@ -1198,10 +1147,7 @@ module atm_time_integration
       type (mpas_pool_type), pointer :: diag
       type (mpas_pool_type), pointer :: tend
       type (mpas_pool_type), pointer :: tend_physics
-      type (mpas_pool_type), pointer :: lbc
 
-      logical, pointer :: config_apply_lbcs_ptr
-      logical :: config_apply_lbcs
 
       real (kind=RKIND), dimension(:,:), pointer :: ru, ru_p
       real (kind=RKIND), dimension(:,:), pointer :: ru_save
@@ -1239,27 +1185,19 @@ module atm_time_integration
 
       real (kind=RKIND), dimension(:,:), pointer :: rthdynten, divergence, vorticity
 
-      real (kind=RKIND), dimension(:,:), pointer :: lbc_u, lbc_w, lbc_ru, lbc_rho_edge, lbc_rho, lbc_rtheta_m, lbc_rho_zz, lbc_theta
-      real (kind=RKIND), dimension(:,:), pointer :: lbc_tend_u, lbc_tend_w, lbc_tend_ru, lbc_tend_rho_edge, lbc_tend_rho
-      real (kind=RKIND), dimension(:,:), pointer :: lbc_tend_rtheta_m, lbc_tend_rho_zz, lbc_tend_theta
 
-      real (kind=RKIND), dimension(:,:,:), pointer :: lbc_scalars, lbc_tend_scalars
 
       nullify(mesh)
       nullify(state)
       nullify(diag)
       nullify(tend)
       nullify(tend_physics)
-      nullify(lbc)
-      call mpas_pool_get_subpool(domain % blocklist % structs, 'mesh', mesh)
-      call mpas_pool_get_subpool(domain % blocklist % structs, 'state', state)
-      call mpas_pool_get_subpool(domain % blocklist % structs, 'diag', diag)
-      call mpas_pool_get_subpool(domain % blocklist % structs, 'tend', tend)
-      call mpas_pool_get_subpool(domain % blocklist % structs, 'tend_physics', tend_physics)
-      call mpas_pool_get_subpool(domain % blocklist % structs, 'lbc', lbc)
+      call mpas_pool_get_subpool(block % structs, 'mesh', mesh)
+      call mpas_pool_get_subpool(block % structs, 'state', state)
+      call mpas_pool_get_subpool(block % structs, 'diag', diag)
+      call mpas_pool_get_subpool(block % structs, 'tend', tend)
+      call mpas_pool_get_subpool(block % structs, 'tend_physics', tend_physics)
 
-      call mpas_pool_get_config(domain % blocklist % configs, 'config_apply_lbcs', config_apply_lbcs_ptr)
-      config_apply_lbcs = config_apply_lbcs_ptr
 
       MPAS_ACC_TIMER_START('atm_srk3 [ACC_data_xfer]')
       call mpas_pool_get_array(diag, 'ru', ru)
@@ -1422,6 +1360,112 @@ module atm_time_integration
       call mpas_pool_get_array(tend, 'scalars_tend', scalar_tend_save)
       !$acc exit data copyout(scalar_tend_save)
 
+
+      call mpas_pool_get_array(tend_physics, 'rthdynten', rthdynten)
+      !$acc exit data copyout(rthdynten)
+      MPAS_ACC_TIMER_STOP('atm_srk3 [ACC_data_xfer]')
+#endif
+
+   end subroutine mpas_atm_post_dynamics
+
+
+   subroutine mpas_atm_pre_lbcs(block)
+
+      implicit none
+
+      type (block_type), intent(inout) :: block
+
+
+#ifdef MPAS_OPENACC
+      type (mpas_pool_type), pointer :: lbc
+
+      logical, pointer :: config_apply_lbcs_ptr
+      logical :: config_apply_lbcs
+
+      real (kind=RKIND), dimension(:,:), pointer :: lbc_u, lbc_w, lbc_ru, lbc_rho_edge, lbc_rho, lbc_rtheta_m, lbc_rho_zz, lbc_theta
+      real (kind=RKIND), dimension(:,:), pointer :: lbc_tend_u, lbc_tend_w, lbc_tend_ru, lbc_tend_rho_edge, lbc_tend_rho
+      real (kind=RKIND), dimension(:,:), pointer :: lbc_tend_rtheta_m, lbc_tend_rho_zz, lbc_tend_theta
+
+      real (kind=RKIND), dimension(:,:,:), pointer :: lbc_scalars, lbc_tend_scalars
+
+      call mpas_pool_get_config(block % configs, 'config_apply_lbcs', config_apply_lbcs_ptr)
+      config_apply_lbcs = config_apply_lbcs_ptr
+
+      nullify(lbc)
+      call mpas_pool_get_subpool(block % structs, 'lbc', lbc)
+
+      MPAS_ACC_TIMER_START('mpas_atm_pre_lbcs [ACC_data_xfer]')
+      if(config_apply_lbcs) then
+         call mpas_pool_get_array(lbc, 'lbc_u', lbc_u, 2)
+         !$acc enter data create(lbc_u)
+         call mpas_pool_get_array(lbc, 'lbc_w', lbc_w, 2)
+         !$acc enter data create(lbc_w)
+         call mpas_pool_get_array(lbc, 'lbc_ru', lbc_ru, 2)
+         !$acc enter data create(lbc_ru)
+         call mpas_pool_get_array(lbc, 'lbc_rho_edge', lbc_rho_edge, 2)
+         !$acc enter data create(lbc_rho_edge)
+         call mpas_pool_get_array(lbc, 'lbc_theta', lbc_theta, 2)
+         !$acc enter data create(lbc_theta)
+         call mpas_pool_get_array(lbc, 'lbc_rtheta_m', lbc_rtheta_m, 2)
+         !$acc enter data create(lbc_rtheta_m)
+         call mpas_pool_get_array(lbc, 'lbc_rho_zz', lbc_rho_zz, 2)
+         !$acc enter data create(lbc_rho_zz)
+         call mpas_pool_get_array(lbc, 'lbc_rho', lbc_rho, 2)
+         !$acc enter data create(lbc_rho)
+         call mpas_pool_get_array(lbc, 'lbc_scalars', lbc_scalars, 2)
+         !$acc enter data create(lbc_scalars)
+
+         call mpas_pool_get_array(lbc, 'lbc_u', lbc_tend_u, 1)
+         !$acc enter data create(lbc_tend_u)
+         call mpas_pool_get_array(lbc, 'lbc_ru', lbc_tend_ru, 1)
+         !$acc enter data create(lbc_tend_ru)
+         call mpas_pool_get_array(lbc, 'lbc_rho_edge', lbc_tend_rho_edge, 1)
+         !$acc enter data create(lbc_tend_rho_edge)
+         call mpas_pool_get_array(lbc, 'lbc_w', lbc_tend_w, 1)
+         !$acc enter data create(lbc_tend_w)
+         call mpas_pool_get_array(lbc, 'lbc_theta', lbc_tend_theta, 1)
+         !$acc enter data create(lbc_tend_theta)
+         call mpas_pool_get_array(lbc, 'lbc_rtheta_m', lbc_tend_rtheta_m, 1)
+         !$acc enter data create(lbc_tend_rtheta_m)
+         call mpas_pool_get_array(lbc, 'lbc_rho_zz', lbc_tend_rho_zz, 1)
+         !$acc enter data create(lbc_tend_rho_zz)
+         call mpas_pool_get_array(lbc, 'lbc_rho', lbc_tend_rho, 1)
+         !$acc enter data create(lbc_tend_rho)
+         call mpas_pool_get_array(lbc, 'lbc_scalars', lbc_tend_scalars, 1)
+         !$acc enter data create(lbc_tend_scalars)
+      end if
+      MPAS_ACC_TIMER_STOP('mpas_atm_pre_lbcs [ACC_data_xfer]')
+#endif
+
+   end subroutine mpas_atm_pre_lbcs
+
+
+   subroutine mpas_atm_post_lbcs(block)
+
+      implicit none
+
+      type (block_type), intent(inout) :: block
+
+
+#ifdef MPAS_OPENACC
+      type (mpas_pool_type), pointer :: lbc
+
+      logical, pointer :: config_apply_lbcs_ptr
+      logical :: config_apply_lbcs
+
+      real (kind=RKIND), dimension(:,:), pointer :: lbc_u, lbc_w, lbc_ru, lbc_rho_edge, lbc_rho, lbc_rtheta_m, lbc_rho_zz, lbc_theta
+      real (kind=RKIND), dimension(:,:), pointer :: lbc_tend_u, lbc_tend_w, lbc_tend_ru, lbc_tend_rho_edge, lbc_tend_rho
+      real (kind=RKIND), dimension(:,:), pointer :: lbc_tend_rtheta_m, lbc_tend_rho_zz, lbc_tend_theta
+
+      real (kind=RKIND), dimension(:,:,:), pointer :: lbc_scalars, lbc_tend_scalars
+
+      call mpas_pool_get_config(block % configs, 'config_apply_lbcs', config_apply_lbcs_ptr)
+      config_apply_lbcs = config_apply_lbcs_ptr
+
+      nullify(lbc)
+      call mpas_pool_get_subpool(block % structs, 'lbc', lbc)
+
+      MPAS_ACC_TIMER_START('mpas_atm_post_lbcs [ACC_data_xfer]')
       if(config_apply_lbcs) then
          call mpas_pool_get_array(lbc, 'lbc_u', lbc_u, 2)
          !$acc exit data delete(lbc_u)
@@ -1460,13 +1504,71 @@ module atm_time_integration
          call mpas_pool_get_array(lbc, 'lbc_scalars', lbc_tend_scalars, 1)
          !$acc exit data delete(lbc_tend_scalars)
       end if
-
-      call mpas_pool_get_array(tend_physics, 'rthdynten', rthdynten)
-      !$acc exit data copyout(rthdynten)
-      MPAS_ACC_TIMER_STOP('atm_srk3 [ACC_data_xfer]')
+      MPAS_ACC_TIMER_STOP('mpas_atm_post_lbcs [ACC_data_xfer]')
 #endif
 
-   end subroutine mpas_atm_post_dynamics
+   end subroutine mpas_atm_post_lbcs
+
+
+   subroutine mpas_atm_pre_physics(block)
+
+      implicit none
+
+      type (block_type), intent(inout) :: block
+
+
+#ifdef MPAS_OPENACC
+      type (mpas_pool_type), pointer :: state
+      type (mpas_pool_type), pointer :: diag
+      type (mpas_pool_type), pointer :: tend_physics
+
+      real (kind=RKIND), dimension(:,:), pointer :: exner, pressure_base, pressure_p
+      real (kind=RKIND), dimension(:,:), pointer :: rtheta_base, rtheta_p
+      real (kind=RKIND), dimension(:,:), pointer :: uReconstructZonal, uReconstructMeridional
+
+      real (kind=RKIND), dimension(:,:), pointer :: w_1, theta_m_1, rho_zz_1
+      real (kind=RKIND), dimension(:,:,:), pointer :: scalars_1
+
+      real (kind=RKIND), dimension(:,:), pointer :: rthdynten
+
+      nullify(state)
+      nullify(diag)
+      nullify(tend_physics)
+      call mpas_pool_get_subpool(block % structs, 'state', state)
+      call mpas_pool_get_subpool(block % structs, 'diag', diag)
+      call mpas_pool_get_subpool(block % structs, 'tend_physics', tend_physics)
+
+      MPAS_ACC_TIMER_START('physics_driver [ACC_data_xfer]')
+      call mpas_pool_get_array(diag, 'exner', exner)
+      !$acc update host(exner)
+      call mpas_pool_get_array(diag, 'pressure_base', pressure_base)
+      !$acc update host(pressure_base)
+      call mpas_pool_get_array(diag, 'pressure_p', pressure_p)
+      !$acc update host(pressure_p)
+      call mpas_pool_get_array(diag, 'rtheta_base', rtheta_base)
+      !$acc update host(rtheta_base)
+      call mpas_pool_get_array(diag, 'rtheta_p', rtheta_p)
+      !$acc update host(rtheta_p)
+      call mpas_pool_get_array(diag, 'uReconstructZonal', uReconstructZonal)
+      !$acc update host(uReconstructZonal)
+      call mpas_pool_get_array(diag, 'uReconstructMeridional', uReconstructMeridional)
+      !$acc update host(uReconstructMeridional)
+
+      call mpas_pool_get_array(state, 'w', w_1, 1)
+      !$acc update host(w_1)
+      call mpas_pool_get_array(state, 'theta_m', theta_m_1, 1)
+      !$acc update host(theta_m_1)
+      call mpas_pool_get_array(state, 'rho_zz', rho_zz_1, 1)
+      !$acc update host(rho_zz_1)
+      call mpas_pool_get_array(state, 'scalars', scalars_1, 1)
+      !$acc update host(scalars_1)
+
+      call mpas_pool_get_array(tend_physics, 'rthdynten', rthdynten)
+      !$acc update host(rthdynten)
+      MPAS_ACC_TIMER_STOP('physics_driver [ACC_data_xfer]')
+#endif
+
+   end subroutine mpas_atm_pre_physics
 
 
    !----------------------------------------------------------------------------
@@ -1824,14 +1926,14 @@ module atm_time_integration
 
       config_apply_lbcs = config_apply_lbcs_ptr
 
-      call mpas_atm_pre_dynamics(domain)
+      !call mpas_atm_pre_dynamics(domain)
       if (trim(config_time_integration) == 'SRK3') then
          call atm_srk3(domain, dt, itimestep, exchange_halo_group)
       else
          call mpas_log_write('Unknown time integration option '//trim(config_time_integration), messageType=MPAS_LOG_ERR)
          call mpas_log_write('Currently, only ''SRK3'' is supported.', messageType=MPAS_LOG_CRIT)
       end if
-      call mpas_atm_post_dynamics(domain)
+      !call mpas_atm_post_dynamics(domain)
 
       call mpas_set_timeInterval(dtInterval, dt=dt)
       currTime = nowTime + dtInterval
