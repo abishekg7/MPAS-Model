@@ -259,7 +259,6 @@ module mpas_soundings
             call MPAS_pool_get_array(diag, 'exner', exner)
             !$acc update host(exner)
             call MPAS_pool_get_array(diag, 'pressure_base', pressure_base)
-            !$acc update host(pressure_base)
             call MPAS_pool_get_array(diag, 'pressure_p', pressure_p)
             !$acc update host(pressure_p)
             call MPAS_pool_get_array(diag, 'uReconstructZonal', uReconstructZonal)

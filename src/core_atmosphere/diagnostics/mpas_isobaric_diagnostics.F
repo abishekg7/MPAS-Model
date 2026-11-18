@@ -127,7 +127,6 @@ module mpas_isobaric_diagnostics
             MPAS_ACC_TIMER_START('isobaric_diagnostics_compute [ACC_data_xfer]')
             ! Pressure is needed for vertical interpolation of any isobaric field
             call mpas_pool_get_array(diag, 'pressure_base', pressure_base)
-            !$acc update host(pressure_base)
             call mpas_pool_get_array(diag, 'pressure_p', pressure_p)
             !$acc update host(pressure_p)
 

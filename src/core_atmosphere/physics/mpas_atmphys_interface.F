@@ -584,10 +584,10 @@
  call mpas_pool_get_array(state,'rho_zz' ,rho_zz ,time_lev)
  call mpas_pool_get_array(state,'theta_m',theta_m,time_lev)
  call mpas_pool_get_array(state,'w'      ,w      ,time_lev)
- !$acc update host(exner, pressure_b, pressure_p, rho_zz, theta_m, w)
+ !$acc update host(exner, pressure_p, rho_zz, theta_m, w)
 
- call mpas_pool_get_array(state,'scalars',scalars,time_lev)
- !$acc update host(scalars)
+ !call mpas_pool_get_array(state,'scalars',scalars,time_lev)
+ !!$acc update host(scalars)
 
  MPAS_ACC_TIMER_STOP('pre_microphysics [ACC_data_xfer]')
 #endif
@@ -1173,7 +1173,7 @@ end subroutine pre_microphysics
 
 
  MPAS_ACC_TIMER_START('post_microphysics [ACC_data_xfer]')
- !$acc update device(exner, exner_b, pressure_b, pressure_p, rtheta_b)
+ !$acc update device(exner, pressure_p)
  !$acc update device(rtheta_p, rho_zz, theta_m, scalars)
  !$acc update device(rt_diabatic_tend)
  MPAS_ACC_TIMER_STOP('post_microphysics [ACC_data_xfer]')

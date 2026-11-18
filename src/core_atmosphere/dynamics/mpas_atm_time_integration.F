@@ -1012,7 +1012,7 @@ module atm_time_integration
       call mpas_pool_get_array(diag, 'pressure_base', pressure_base)
       !$acc enter data copyin(pressure_base) ! use values from atm_init_coupled_diagnostics
       call mpas_pool_get_array(diag, 'pressure', pressure)
-      !$acc enter data copyin(pressure)
+      !$acc enter data create(pressure)
       call mpas_pool_get_array(diag, 'v', v)
       !$acc enter data copyin(v) ! use values from atm_compute_solve_diagnostics
       call mpas_pool_get_array(diag, 'rtheta_pp', rtheta_pp)
@@ -1542,11 +1542,11 @@ module atm_time_integration
       call mpas_pool_get_array(diag, 'exner', exner)
       !$acc update host(exner)
       call mpas_pool_get_array(diag, 'pressure_base', pressure_base)
-      !$acc update host(pressure_base)
+      !!$acc update host(pressure_base)
       call mpas_pool_get_array(diag, 'pressure_p', pressure_p)
       !$acc update host(pressure_p)
       call mpas_pool_get_array(diag, 'rtheta_base', rtheta_base)
-      !$acc update host(rtheta_base)
+      !!$acc update host(rtheta_base)
       call mpas_pool_get_array(diag, 'rtheta_p', rtheta_p)
       !$acc update host(rtheta_p)
       call mpas_pool_get_array(diag, 'uReconstructZonal', uReconstructZonal)
@@ -1563,8 +1563,6 @@ module atm_time_integration
       call mpas_pool_get_array(state, 'scalars', scalars_1, 1)
       !$acc update host(scalars_1)
 
-      call mpas_pool_get_array(tend_physics, 'rthdynten', rthdynten)
-      !$acc update host(rthdynten)
       MPAS_ACC_TIMER_STOP('physics_driver [ACC_data_xfer]')
 #endif
 
@@ -2861,7 +2859,7 @@ module atm_time_integration
 #ifdef DO_PHYSICS
       MPAS_ACC_TIMER_START('atm_srk3: physics ACC_data_xfer')
       call mpas_pool_get_array(state, 'scalars', scalars_1, 1)
-      !$acc update self(scalars_1)
+      !!$acc update self(scalars_1)
       call mpas_pool_get_array(state, 'scalars', scalars_2, 2)
       !$acc update self(scalars_2)
       MPAS_ACC_TIMER_STOP('atm_srk3: physics ACC_data_xfer')
@@ -2875,7 +2873,7 @@ module atm_time_integration
          !$acc update self(theta_m)
 
          call mpas_pool_get_array(tend_physics, 'rthdynten', rthdynten)
-         !$acc update self(rthdynten)
+         !!$acc update self(rthdynten)
          MPAS_ACC_TIMER_STOP('atm_srk3: physics ACC_data_xfer')
 
          !NOTE: The calculation of the tendency due to horizontal and vertical advection for the water vapor mixing ratio
@@ -2901,9 +2899,6 @@ module atm_time_integration
       where ( scalars_2(:,:,:) < 0.0)  &
          scalars_2(:,:,:) = 0.0
 
-      MPAS_ACC_TIMER_START('atm_srk3: physics ACC_data_xfer')
-      !$acc update device(scalars_2, rthdynten)
-      MPAS_ACC_TIMER_STOP('atm_srk3: physics ACC_data_xfer')
       !call microphysics schemes:
       if (trim(config_microp_scheme) /= 'off')  then
         call pre_microphysics( block % configs, state, diag, 2)
